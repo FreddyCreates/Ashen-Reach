@@ -1,0 +1,13 @@
+{
+  "name": "ashen-reach",
+  "version": "0.7.0",
+  "private": true,
+  "type": "module",
+  "description": "An offline-capable space adventure with planetary flight and spirit companions",
+  "engines": {"node": ">=20"},
+  "scripts": {
+    "start": "node server/local.mjs",
+    "test": "node --test test/*.mjs",
+    "release": "python3 release/build.py"
+  }
+}
