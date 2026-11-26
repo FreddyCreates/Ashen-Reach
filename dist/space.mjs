@@ -1,3 +1,4 @@
+import {restoreAir,airEpisode,acceptAir,deliverAir} from './borrowed-air.mjs';
 import {landingEntries} from './landing-atlas.mjs';
 import {stationFor,stationDistance,stationBearing,buildStation,serviceAvailable,serviceHull,serviceRack} from './field-station.mjs';
 import {restoreCampaign,episode,acceptSignal,fitRepeater,blockadeActive,clearBlockade,broadcast,factions,salePremium,spiritCooldown} from './campaign.mjs';
@@ -74,6 +75,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)saveCrewPos
 let ledger=newLedger();
 try{const l=JSON.parse(localStorage.getItem('ashen.mining.v1'));if(l&&Array.isArray(l.ore)&&l.ore.length===4&&l.mined)ledger=l}catch{}
 ledger.campaign=restoreCampaign(ledger.campaign);
+ledger.air=restoreAir(ledger.air);
 function transact(op){const message=op();try{localStorage.setItem('ashen.mining.v1',JSON.stringify(ledger))}catch{return message+' Storage unavailable.'}return message}
 function harvest(){
  if(!g.survey?.lastSample)return tell('Fly through a survey beacon below 160 m to locate a deposit.');
@@ -101,6 +103,17 @@ function fieldStation(message=''){
  choices.push(['Free flight',launch],['Bridge',bridge]);
  panel('Field station',message+' '+status+' Ferrite aboard: '+ledger.ore[0]+'.',choices)
 }
+function borrowedAir(message=''){
+ const chapter=airEpisode(ledger);if(!chapter)return campaignLog();
+ const options=[];
+ if(ledger.air.stage==='available')options.push(['Accept emergency supply run',()=>{transact(()=>acceptAir(ledger));receipt('Accepted Borrowed Air');borrowedAir()}]);
+ if(ledger.air.stage==='supply'){
+  options.push(sector===2?['Survey Veyra',survey]:['Plot Veyra',()=>inspect(2)]);
+  if(sector===2)for(const [choice,label] of [['clinic','Supply clinic · 80 cr'],['condenser','Supply condenser · 100 cr']])options.push([label,()=>{const result=transact(()=>deliverAir(ledger,sector,choice));if(ledger.air.stage==='complete')receipt('Delivered coolant to '+choice);borrowedAir(result)}]);
+ }
+ panel(chapter.title,[message,chapter.body].filter(Boolean).join(' '),[...options,['The Choir Line',campaignLog],['Bridge',bridge]]);
+ $('panel').classList.add('campaign-brief');$('panel').querySelector('small').textContent='BORROWED AIR / ACT II';
+}
 function campaignLog(){
  const chapter=episode(ledger),options=[];
  if(chapter.stage==='signal')options.push(['Trace the convoy signal',()=>{
@@ -115,6 +128,7 @@ function campaignLog(){
   const label=ally==='Lantern Guild'?'Guild · Nacre ferrite +3 cr/unit':'Wakekeepers · spirit cooldown −4 s';
   options.push([label,()=>{transact(()=>broadcast(ledger,ally));receipt('Entrusted the beacon to '+ally);campaignLog()}])
  }
+ if(chapter.stage==='complete')options.push(['Continue · Borrowed Air',()=>borrowedAir()]);
  panel(chapter.title,chapter.body,[...options,['Bridge',bridge]]);
  const briefing=$('panel');briefing.classList.add('campaign-brief');
  briefing.querySelector('small').textContent='THE CHOIR LINE  /  SHIP LOG';
