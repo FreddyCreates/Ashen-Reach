@@ -283,7 +283,7 @@ function hearth(message=''){
   options.push(['Request N-04 approach',()=>{takeHelm();aiHarness.setAutopilot(null);requestApproach(s,p);unpause();tell('N-04 clearance granted. Manual input cancels approach.')}]);
   if(status?.ready){
    options.push(['Secure landing gear',()=>{let docked=false;transact(()=>{docked=dockHarbor(s,p,ledger,g.ship);return 'Berth secured'});if(docked){receipt('Docked at Hearth Exchange N-04');hearth('Landing gear secured.')}}]);
-   if(ledger.harbor?.hull===g.ship&&ledger.harbor.position.every((v,i)=>Math.abs(v-s.p.toArray()[i])<.1)){
+   if(ledger.harbor?.hull===g.ship&&Array.isArray(ledger.harbor.position)&&ledger.harbor.position.length===3&&ledger.harbor.position.every((v,i)=>Math.abs(v-s.p.toArray()[i])<.1)){
     options.push(['Enter mineral exchange',()=>exchange()],['Repair hull · 15 cr',()=>hearth(transact(()=>{if(g.hp>=ships[g.ship].hull)return 'Hull fully repaired.';if(ledger.credits<15)return 'Insufficient credits.';ledger.credits-=15;g.hp=ships[g.ship].hull;return 'Hull restored.'}))],['Depart N-04',()=>{transact(()=>{delete ledger.harbor;return 'Berth released'});s.harborApproach=false;s.aim=false;unpause();tell('Hold Climb to clear the pad.')}]);
    }
   }
@@ -405,7 +405,7 @@ function update(dt){
    if(event){recordCrew(g.crew,crewStorage,event,s.body.name,ships[g.ship].name);tell(event)}
    else if(crewCheckpointAge>=3||s.body.id!==sector){saveCrewPose();crewCheckpointAge=0}
   }else travel(s,dt,manual);
-  if(sector!==s.body.id){sector=save.sector=s.body.id;g.world=world(sector,tick);persist()}return
+  if(sector!==s.body.id){if(ledger.harbor)transact(()=>{delete ledger.harbor;return 'Berth released'});sector=save.sector=s.body.id;g.world=world(sector,tick);persist()}return
  }
 
  const yaw=g.mode==='deck'?g.yaw:0,mx=Math.cos(yaw)*x+Math.sin(yaw)*z,mz=-Math.sin(yaw)*x+Math.cos(yaw)*z;
