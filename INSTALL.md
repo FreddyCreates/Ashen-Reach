@@ -33,3 +33,5 @@ Board a ship and open Bridge → Free flight, or walk to the helm. Hold the stic
 ## First session in 0.7
 
 After boarding, open **Bridge → The Choir Line** to start the convoy story. For an assisted flight, use **Crew station → Command a landing**. Astra records completed approaches in the Landing atlas. On Aurelia, collect four ferrite below 30 metres. At a clearance of five metres or less, open **Bridge → Field station** to build a service station, or keep the ore for the Nacre repeater. Construction and the repeater each consume four ferrite.
+
+To run freight, keep mined ore aboard, plot Nacre from **Bridge → Hearth harbor**, fly the assisted N-04 approach and secure the landing gear. Open the mineral exchange, load one manifest, then deliver it. Hearth receiving, the reduced ship hold and the exact fleet credit payment persist across reloads.

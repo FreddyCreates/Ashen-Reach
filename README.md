@@ -30,6 +30,8 @@ See the [visual production specification](VISUAL-DIRECTION.md) for the scene and
 
 Board a ship, open **Bridge → Hearth harbor**, plot Nacre and request the N-04 approach. Secure the landing gear within the validated speed and clearance envelope to access exchange and repair services. Press **V** during continuous flight to switch to the physical cockpit with live instruments when WebGL is available. The lower-detail HUD remains the fallback. Walkable harbor interiors and cinematic visual parity are not yet released.
 
+At N-04, enter the mineral exchange to load a manifest from ore in the ship hold, then deliver it into Hearth receiving. The hold, station inventory and fleet wallet persist together. Retrying a delivered manifest returns its receipt without issuing duplicate credits.
+
 [Studio design archive](game-design/README.md)
 
 ## Current build and technical documentation
