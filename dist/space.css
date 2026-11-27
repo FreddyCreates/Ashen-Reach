@@ -248,3 +248,24 @@ nav>*{pointer-events:auto}
 
 .navigation-display{z-index:0;pointer-events:none}
 body:has(.navigation-display:not([hidden])) #view{visibility:hidden}
+
+/* Nacre art direction: restrained amber navigation, charcoal framing, readable live instruments. */
+#flight-instruments{position:fixed;inset:0;pointer-events:none;z-index:3;font:12px system-ui;color:#dbe9e8}
+.flight-compass{position:absolute;top:12%;left:50%;transform:translateX(-50%);width:min(32vw,300px);text-align:center;border-bottom:1px solid #a5bcc0;padding:0 0 8px;background:repeating-linear-gradient(90deg,transparent 0 19px,#9cb0b588 19px 20px) bottom/100% 5px no-repeat}
+.flight-compass span,.flight-tape small,.flight-console small{display:block;letter-spacing:.13em;font-size:10px;color:#b6c6c7}
+.flight-compass b,.flight-tape b,.flight-console b{display:block;font:600 16px monospace;text-shadow:0 2px 6px #000}
+.flight-tape{position:absolute;top:43%;padding:10px 12px;border:1px solid #aac0bf66;background:#08141bb0;min-width:88px}
+.speed-tape{left:13%;border-left:2px solid #8dd6dd}.altitude-tape{right:13%;border-right:2px solid #dfb77c;text-align:right}
+.flight-tape i{display:block;height:24px;margin-top:6px;background:repeating-linear-gradient(0deg,transparent 0 5px,#8ba8aa70 5px 6px);width:12px}
+.altitude-tape i{margin-left:auto}
+.flight-destination{position:absolute;transform:translate(-50%,-50%);text-align:center;color:#f0c888;text-shadow:0 1px 6px #000;white-space:nowrap}
+.flight-destination span{display:block;font:32px monospace;line-height:1}.flight-destination b,.flight-destination small{display:block;letter-spacing:.1em}
+.flight-console{position:absolute;bottom:17%;left:50%;transform:translateX(-50%);display:flex;gap:2px;max-width:65%;background:#11191d;border:1px solid #71848b88;padding:5px;box-shadow:0 12px 30px #0008}
+.flight-console>div{background:linear-gradient(135deg,#132c35,#09141b);border:1px solid #354b54;padding:10px 14px;text-align:center;min-width:0}
+.flight-console b{color:#9ed6dc;font-size:13px;margin-top:5px}
+.flight-frame-left,.flight-frame-right{display:none}
+.cockpit-frame .flight-frame-left,.cockpit-frame .flight-frame-right{display:block;position:absolute;top:0;bottom:0;width:14%;background:linear-gradient(90deg,#080d12,#26333b 60%,#987247 63%,#141c21 65%);clip-path:polygon(0 0,18% 0,100% 100%,0 100%)}
+.cockpit-frame .flight-frame-right{right:0;transform:scaleX(-1)}
+.cockpit-frame .flight-console{border:8px solid #252e35;border-top-color:#806b4e;box-shadow:0 12px 40px #000b}
+@media(max-width:650px){.flight-tape{top:37%;padding:6px;min-width:64px}.speed-tape{left:3%}.altitude-tape{right:3%}.flight-tape b{font-size:12px}.flight-console{bottom:28%;max-width:92%;width:max-content}.flight-console>div{padding:6px}.flight-console small{font-size:8px}.flight-console b{font-size:11px}.flight-compass{top:18%}}
+@media(prefers-reduced-motion:reduce){.pulse-ring,.astra-comms{animation:none}.neural-bar{transition:none}}

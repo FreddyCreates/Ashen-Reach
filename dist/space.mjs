@@ -536,6 +536,34 @@ hangar();
 let previous=performance.now(),hud='';
 function label(id,value){const el=$(id);if(el&&el.textContent!==value)el.textContent=value}
 
+function updateFlightInstruments(){
+ const el=$('flight-instruments');if(!el)return;
+ const s=g.mode==='journey'&&!overlay&&!districtOpen?g.journey:null;
+ el.hidden=!s;
+ if(!s)return;
+ el.classList.toggle('cockpit-frame',cameraMode==='cockpit');
+ const normal=s.p.clone().sub(s.body.center).normalize();
+ const bearing=s.target.center.clone().sub(s.p);
+ const vertical=s.v.dot(normal),heading=Math.atan2(s.forward.z,s.forward.x)*180/Math.PI;
+ const format=n=>Math.round(n).toLocaleString('en-US');
+ label('flight-speed',format(s.v.length())+' m/s');
+ label('flight-alt',format(s.alt)+' m');
+ label('flight-vs',(vertical>=0?'+':'')+format(vertical)+' m/s');
+ label('flight-heading',String(Math.round((heading+360)%360)%360).padStart(3,'0')+'°');
+ label('flight-target',s.target.name.toUpperCase());
+ label('flight-distance',format(Math.max(0,bearing.length()-s.target.r)/1000)+' km');
+ label('flight-drive',s.cruise?'CRUISE ASSIST':'NEWTONIAN');
+ label('flight-hull',Math.round(100*Math.max(0,g.hp)/ships[g.ship].hull)+'%');
+ const mark=$('flight-marker');
+ if(mark){
+ const z=bearing.dot(s.forward),up=s.right.clone().cross(s.forward).normalize();
+ mark.hidden=z<=0;
+ if(z>0){
+ mark.style.left=Math.max(8,Math.min(92,50+bearing.dot(s.right)*innerHeight*.83/z/innerWidth*100))+'%';
+ mark.style.top=Math.max(15,Math.min(78,50-bearing.dot(up)*.83/z*100))+'%';
+ }
+ }
+}
 function updateCockpitHUD(){
   const bracket = $('target-bracket');
   if(!bracket)return;
@@ -585,6 +613,7 @@ function frame(now){
     else{showTrajectory(null);render(g,clock)}
   }
   updateCockpitHUD();
+  updateFlightInstruments();
   const nav=g.mode==='navigation'?orbitReadout(g.trajectory):null;
   const tracked=g.mode==='journey'&&g.journey.trackStation&&stationFor(ledger,sector);
   const h=overlay?'':g.mode==='journey'?((tracked?stationBearing(tracked,g.journey)+'\n':'')+(g.crew.duty==='helm'?'Astra · '+g.crew.flightOrder.stage+' → '+g.journey.target.name+'\n':'')+(g.journey.alt<5?(sector%4===2?'Cloud skimming':'Surface drive'):'Free flight')+' · '+(g.journey.alt<1000?Math.round(g.journey.alt)+' m':Math.round(g.journey.alt/1000).toLocaleString()+' km')+' altitude · '+Math.round(g.journey.v.length()).toLocaleString()+' m/s'):nav?('Orbit · '+Math.round(nav.altitude/1000)+' km　 '+(nav.speed/1000).toFixed(2)+' km/s　 ×'+g.trajectory.warp+'\nPeriapsis '+Math.round(nav.periapsis/1000)+' km  /  Apoapsis '+(Number.isFinite(nav.apoapsis)?Math.round(nav.apoapsis/1000)+' km':'escape')):g.mode==='survey'?(surveyStatus(g.survey)+(g.crew.duty==='survey'?' · Astra piloting':'')):g.mode==='deck'?'Forward helm · '+Math.max(0,Math.ceil(g.z+4))+' m':('Hull '+g.hp+'/'+ships[g.ship].hull+'　 Patrol '+g.enemies.length+'　 Spirit '+(recharge?Math.ceil(recharge)+'s':'ready'));
