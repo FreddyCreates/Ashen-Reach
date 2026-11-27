@@ -1,11 +1,11 @@
 import * as T from './three.module.js';
 import {localHeight} from './planet-geography.mjs';
-import {shipModel} from './fleet-models.mjs';
+import {shipModel,surfaces} from './fleet-models.mjs';
 let active=null;
-function dispose(){if(!active)return;active.canvas.remove();active.scene?.traverse(o=>{o.geometry?.dispose();if(o.material&&!Array.isArray(o.material))o.material.dispose()});active.renderer?.dispose();active.renderer?.forceContextLoss();active=null}
+function dispose(){if(!active)return;active.canvas.remove();active.scene?.traverse(o=>{o.geometry?.dispose();if(o.material&&!Array.isArray(o.material)&&![...surfaces.values()].includes(o.material))o.material.dispose()});active.renderer?.dispose();active.renderer?.forceContextLoss();active=null}
 export function closeSurface(){dispose()}
 function create(s,hull){
- const canvas=document.createElement('canvas');canvas.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none';document.body.prepend(canvas);
+ const canvas=document.createElement('canvas');canvas.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none';document.body.append(canvas);canvas.style.zIndex='1';
  let renderer;try{renderer=new T.WebGLRenderer({canvas,antialias:true})}catch{}
  if(!renderer){const fallback=document.createElement('canvas');fallback.style.cssText=canvas.style.cssText;canvas.replaceWith(fallback);return {canvas:fallback,ctx:fallback.getContext('2d'),s}}
  renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.toneMapping=T.ACESFilmicToneMapping;
