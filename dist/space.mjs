@@ -7,6 +7,7 @@ import {restoreCampaign,episode,acceptSignal,fitRepeater,blockadeActive,clearBlo
 import {boardNavigator,assignLanding,checkpoint,resumeLanding,relieveNavigator,advanceLanding} from './crew-operations.mjs';
 import {newJourney,travel,drawJourney,relief} from './deep-flight.mjs';
 import {newLedger,extract,capacity,quote,resources,sell,upgrade} from './mining.mjs';
+import {activeMarketManifest,marketInventory,createMarketManifest,settleMarketManifest,cancelMarketManifest} from './market-manifest.mjs';
 import {loadCrew,recordCrew,pilot} from './crew.mjs';
 import {createSurvey,advanceSurvey,surveyStatus} from './survey.mjs';
 import {createTrajectory,stepTrajectory,orbitReadout,showTrajectory} from './orbital-flight.mjs';
@@ -173,18 +174,34 @@ function campaignLog(){
  }
  $('choices').prepend(route)
 }
+function hearthDocked(){
+ const pose=ledger.harbor?.position,s=g.mode==='journey'?g.journey:null;
+ return sector===1&&ledger.harbor?.body===1&&ledger.harbor?.hull===g.ship&&s?.body?.id===1&&
+  Array.isArray(pose)&&pose.length===3&&pose.every((v,i)=>Number.isFinite(v)&&Math.abs(v-s.p.toArray()[i])<.1)
+}
 function exchange(message=''){
- const buttons=resources.flatMap((r,i)=>{
-  if(!ledger.ore[i])return [];
+ const active=activeMarketManifest(ledger),atHearth=hearthDocked(),buttons=[];
+ if(sector===1&&atHearth){
+  if(active){
+   buttons.push(['Deliver '+active.id+' · '+active.units+' '+resources[active.resource],()=>exchange(transact(()=>settleMarketManifest(ledger,active.id,sector).message))]);
+   buttons.push(['Cancel '+active.id,()=>exchange(transact(()=>cancelMarketManifest(ledger,active.id).message))])
+  }else for(const [i,r] of resources.entries()){
+   if(!ledger.ore[i])continue;
+   const price=quote(i,sector)+salePremium(ledger,i,sector);
+   buttons.push(['Manifest '+ledger.ore[i]+' '+r+' · '+price+' cr/unit',()=>exchange(transact(()=>createMarketManifest(ledger,i,sector,price).message))])
+  }
+ }else if(sector!==1)for(const [i,r] of resources.entries()){
+  if(!ledger.ore[i]||active?.resource===i)continue;
   const premium=salePremium(ledger,i,sector);
-  return [['Sell '+ledger.ore[i]+' '+r+' · '+(quote(i,sector)+premium)+' cr/unit',()=>exchange(transact(()=>{
+  buttons.push(['Sell '+ledger.ore[i]+' '+r+' · '+(quote(i,sector)+premium)+' cr/unit',()=>exchange(transact(()=>{
    const extra=ledger.ore[i]*premium,base=sell(ledger,i,sector);ledger.credits+=extra;
    return base+(extra?' Guild premium: '+extra+' credits.':'')
-  }))]]
- });
+  }))])
+ }
  if(ledger.campaign.stage==='repeater'&&sector===1)buttons.unshift(['Fit convoy repeater · 4 ferrite',()=>exchange(transact(()=>fitRepeater(ledger,sector)))]);
  if(ledger.rack<4)buttons.push(['Fit cargo rack · '+45*(ledger.rack+1)+' cr',()=>exchange(transact(()=>upgrade(ledger)))]);
- panel(g.world.name+' exchange',message+' Trade credits '+ledger.credits+' · Hold '+ledger.ore.join(' / ')+' · Capacity '+capacity(ledger),[...buttons,['Return to district',freeport],['Bridge',bridge]])
+ const stock=marketInventory(ledger,1),manifest=active?' · Loaded '+active.id:'',access=sector===1&&!atHearth?' Land at Hearth N-04 to manifest and deliver cargo.':'';
+ panel(g.world.name+' exchange',message+access+' Trade credits '+ledger.credits+' · Hold '+ledger.ore.join(' / ')+' · Capacity '+capacity(ledger)+manifest+' · Hearth receiving '+stock.join(' / '),[...buttons,[atHearth?'Return to berth':'Return to district',atHearth?hearth:freeport],['Bridge',bridge]])
 }
 function receipt(event){recordCrew(g.crew,crewStorage,event,g.world.name,ships[g.ship].name)}
 function crewStation(){
@@ -284,7 +301,7 @@ function hearth(message=''){
   options.push(['Request N-04 approach',()=>{takeHelm();aiHarness.setAutopilot(null);requestApproach(s,p);unpause();tell('N-04 clearance granted. Manual input cancels approach.')}]);
   if(status?.ready){
    options.push(['Secure landing gear',()=>{let docked=false;transact(()=>{docked=dockHarbor(s,p,ledger,g.ship);return 'Berth secured'});if(docked){receipt('Docked at Hearth Exchange N-04');hearth('Landing gear secured.')}}]);
-   if(ledger.harbor?.hull===g.ship&&Array.isArray(ledger.harbor.position)&&ledger.harbor.position.length===3&&ledger.harbor.position.every((v,i)=>Math.abs(v-s.p.toArray()[i])<.1)){
+   if(hearthDocked()){
     options.push(['Enter mineral exchange',()=>exchange()],['Repair hull · 15 cr',()=>hearth(transact(()=>{if(g.hp>=ships[g.ship].hull)return 'Hull fully repaired.';if(ledger.credits<15)return 'Insufficient credits.';ledger.credits-=15;g.hp=ships[g.ship].hull;return 'Hull restored.'}))],['Depart N-04',()=>{transact(()=>{delete ledger.harbor;return 'Berth released'});s.harborApproach=false;s.aim=false;unpause();tell('Hold Climb to clear the pad.')}]);
    }
   }
