@@ -1,3 +1,4 @@
+import {renderCockpit} from './cockpit-interior.mjs';
 import {harborFor,harborStatus,requestApproach,advanceApproach,dockHarbor,restoreHarbor} from './hearth-harbor.mjs';
 import {restoreAir,airEpisode,acceptAir,deliverAir} from './borrowed-air.mjs';
 import {landingEntries} from './landing-atlas.mjs';
@@ -606,6 +607,15 @@ function frame(now){
     else{showTrajectory(null);render(g,clock)}
   }
   updateCockpitHUD();
+  const flight=g.mode==='journey'&&!overlay&&!districtOpen?g.journey:null;
+  if(flight&&cameraMode==='cockpit'){
+   const port=flight.harborApproach?harborFor(flight.body,relief):null;
+   const normal=flight.p.clone().sub(flight.body.center).normalize();
+   const north=normal.clone().multiplyScalar(-normal.y);north.y+=1;
+   const east=north.clone().cross(normal).normalize();north.normalize();
+   const heading=(Math.atan2(flight.forward.dot(east),flight.forward.dot(north))*180/Math.PI+360)%360;
+   renderCockpit(true,{hull:Math.max(0,g.hp)/ships[g.ship].hull*100,speed:flight.v.length(),drive:flight.cruise?'CRUISE':'NEWTONIAN',target:port?'HEARTH N-04':flight.target.name,range:port?flight.p.distanceTo(port.position):Math.max(0,flight.p.distanceTo(flight.target.center)-flight.target.r),alt:flight.alt,vertical:flight.v.dot(normal),approach:!!port,heading},now);
+  }else renderCockpit(false,null,now);
   const nav=g.mode==='navigation'?orbitReadout(g.trajectory):null;
   const tracked=g.mode==='journey'&&g.journey.trackStation&&stationFor(ledger,sector);
   const portStatus=g.mode==='journey'?harborStatus(harborFor(g.journey.body,relief),g.journey):null;
