@@ -1,9 +1,11 @@
 # Ashen Reach
-A mobile space campaign in Three.js. Serve dist/ over HTTP. Pilot three hulls, fly from orbit to the surface, and call a spirit into battle.
+An offline-capable science-fiction RPG and living-world simulation in development. Pilot three hulls, fly from orbit to the surface, and call a spirit into battle. The [studio production bible](GAME-PLAN.md#studio-production-bible--expansion-mandate) sets the direction for connected ports, autonomous crews, civilization and fleet ownership.
 
 ## Play The Choir Line
 
 Board a hull, open **Bridge → The Choir Line** and trace the Nine Lanterns distress call. Mine ferrite on Aurelia, fit the repeater at Nacre, and bring a spirit into the Orison blockade. The final broadcast changes the price of a future cargo sale or the time it takes your spirit to answer.
+
+After either Choir Line ending, select **Continue · Borrowed Air** in the ship log. Extract four ammonia on Veyra and choose the clinic or condenser delivery. This initial Act II slice persists the outcome and pays the fleet once; physical docking and downstream station simulation are future work.
 
 For an agent-flown trip, open **Crew station → Command a landing** and choose a body. Astra takes the helm, operates the flight simulation, checkpoints the order and records the landing coordinates. Moving the stick gives the captain control.
 
