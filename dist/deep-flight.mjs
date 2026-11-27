@@ -1,4 +1,5 @@
 // Metres in a double-precision reference frame. Project only camera-relative differences.
+import {harborFor,harborMesh} from './hearth-harbor.mjs';
 import {stationMesh,stationDistance} from './field-station.mjs';
 import {Vector3} from './three.module.js';
 import {ImprovedNoise} from './ImprovedNoise.mjs';
@@ -193,6 +194,13 @@ export function drawJourney(s,now,station=null){
    const vertices=face.map(q=>{const p=q.p.clone().sub(s.p),z=p.dot(s.forward);
     return {x:w/2+p.dot(s.right)*focal/z,y:h/2-p.dot(up)*focal/z,z,c:q.c}});
    if(vertices.every(q=>q.z>.15))tri.push([...vertices,vertices.reduce((sum,q)=>sum+q.z,0)])
+  }
+ }
+ const port=harborFor(s.body,relief);
+ if(port&&port.position.distanceTo(s.p)<28000){
+  for(const face of harborMesh(port)){
+   const vertices=face.map(q=>{const p=q.p.clone().sub(s.p),z=p.dot(s.forward);return {x:w/2+p.dot(s.right)*focal/z,y:h/2-p.dot(up)*focal/z,z,c:q.c}});
+   if(vertices.every(q=>q.z>.15))tri.push([...vertices,vertices.reduce((sum,q)=>sum+q.z,0)]);
   }
  }
  tri.sort((a,b)=>b[3]-a[3]);if(gl){
