@@ -1,3 +1,4 @@
+import {harborFor,harborStatus,requestApproach,advanceApproach,dockHarbor,restoreHarbor} from './hearth-harbor.mjs';
 import {restoreAir,airEpisode,acceptAir,deliverAir} from './borrowed-air.mjs';
 import {landingEntries} from './landing-atlas.mjs';
 import {stationFor,stationDistance,stationBearing,buildStation,serviceAvailable,serviceHull,serviceRack} from './field-station.mjs';
@@ -70,6 +71,7 @@ function launch(){
   const restored=resumeLanding(g.crew,g.ship,sector);
   if(!restored&&g.crew.duty==='helm'){relieveNavigator(g.crew);receipt('Flight order released after system change')}
   g.journey=restored||newJourney(sector);
+  if(!restored&&sector===1&&restoreHarbor(g.journey,harborFor(g.journey.body,relief),ledger.harbor,g.ship))g.journey.alt=g.journey.p.distanceTo(g.journey.body.center)-g.journey.body.r-relief(g.journey.body,g.journey.p.clone().sub(g.journey.body.center).normalize());
  }
  audio.warpJump();
  g.mode='journey';unpause();tell('Push forward to approach. Steer to explore. Hold Climb to lift off.');
@@ -272,10 +274,26 @@ function settingsMenu(){
   ]);
 }
 
+function hearth(message=''){
+ const s=g.mode==='journey'?g.journey:null,p=s&&harborFor(s.body,relief),status=harborStatus(p,s);
+ const options=[];
+ if(sector!==1)options.push(['Plot Nacre',()=>inspect(1)]);
+ else if(!s)options.push(['Enter Nacre flight',()=>{launch();hearth()}]);
+ else{
+  options.push(['Request N-04 approach',()=>{takeHelm();aiHarness.setAutopilot(null);requestApproach(s,p);unpause();tell('N-04 clearance granted. Manual input cancels approach.')}]);
+  if(status?.ready){
+   options.push(['Secure landing gear',()=>{let docked=false;transact(()=>{docked=dockHarbor(s,p,ledger,g.ship);return 'Berth secured'});if(docked){receipt('Docked at Hearth Exchange N-04');hearth('Landing gear secured.')}}]);
+   if(ledger.harbor?.hull===g.ship&&ledger.harbor.position.every((v,i)=>Math.abs(v-s.p.toArray()[i])<.1)){
+    options.push(['Enter mineral exchange',()=>exchange()],['Repair hull · 15 cr',()=>hearth(transact(()=>{if(g.hp>=ships[g.ship].hull)return 'Hull fully repaired.';if(ledger.credits<15)return 'Insufficient credits.';ledger.credits-=15;g.hp=ships[g.ship].hull;return 'Hull restored.'}))],['Depart N-04',()=>{transact(()=>{delete ledger.harbor;return 'Berth released'});s.harborApproach=false;s.aim=false;unpause();tell('Hold Climb to clear the pad.')}]);
+   }
+  }
+ }
+ panel('Hearth Exchange · N-04',[message,status?'Range '+Math.round(status.range)+' m · Pad clearance '+Math.round(status.height)+' m · Speed '+Math.round(status.speed)+' m/s. Dock within 34 m, 0–6 m above deck and below 3 m/s.':'Nacre planetary harbor. Fly to the physical landing pad for services.'].filter(Boolean).join(' '),[...options,['Bridge',bridge]]);
+}
 function bridge(){
  if(g.mode==='hangar'){hangar();return}
  panel(ships[g.ship].name+' bridge',g.world.name+' · '+save.claims.length+' claimed worlds on this device.',[
- ['Resume',unpause],['The Choir Line',campaignLog],['Free flight',launch],['Combat patrol',patrol],['Crew station',crewStation],['Field station',()=>fieldStation()],['Orbital navigation',transfer],['Surface survey',survey],['Enter freeport',freeport],['Star chart',chart],['Walk the deck',deck],['Settings & AI Core',settingsMenu],['Change ship',hangar]])
+ ['Resume',unpause],['The Choir Line',campaignLog],['Free flight',launch],['Combat patrol',patrol],['Crew station',crewStation],['Field station',()=>fieldStation()],['Hearth harbor',()=>hearth()],['Orbital navigation',transfer],['Surface survey',survey],['Enter freeport',freeport],['Star chart',chart],['Walk the deck',deck],['Settings & AI Core',settingsMenu],['Change ship',hangar]])
 }
 function summon(){
  if(recharge>0){tell('Spirit returns in '+Math.ceil(recharge)+'s');return}
@@ -312,7 +330,7 @@ function actions(){
    const site='field/'+local.toArray().map(v=>Math.floor(v/250)).join('/');
    tell(transact(()=>extract(ledger,sector,site)))
   },a);
-  button('Bearing',selectDestination,a);
+  button('Bearing',selectDestination,a);button('Harbor',()=>hearth(),a);
   if(g.journey.alt<3500){
    button('Survey descent',()=>{
     survey();
@@ -377,8 +395,11 @@ function update(dt){
  if(g.mode==='journey'){
   const s=g.journey;if(x||keys.has('i')||keys.has('k'))s.aim=false;
   const manual={turn:x/mag,drive:-z/mag,pitch:Number(keys.has('i'))-Number(keys.has('k')),lift:Number(keys.has('u'))-Number(keys.has('j'))};
+  if(Object.values(manual).some(Boolean)){s.harborApproach=false;if(ledger.harbor){transact(()=>{delete ledger.harbor;return 'Berth released'})}}
   if(g.crew.duty==='helm'&&Object.values(manual).some(Boolean)){takeHelm();s.aim=false}
-  if(g.crew.duty==='helm'){
+  if(s.harborApproach){
+   if(advanceApproach(s,harborFor(s.body,relief),dt,relief)){tell('N-04 landing envelope reached. Open Harbor to secure landing gear.');actions()}
+  }else if(g.crew.duty==='helm'){
    const event=advanceLanding(g.crew,s,dt);
    crewCheckpointAge+=dt;
    if(event){recordCrew(g.crew,crewStorage,event,s.body.name,ships[g.ship].name);tell(event)}
@@ -587,7 +608,8 @@ function frame(now){
   updateCockpitHUD();
   const nav=g.mode==='navigation'?orbitReadout(g.trajectory):null;
   const tracked=g.mode==='journey'&&g.journey.trackStation&&stationFor(ledger,sector);
-  const h=overlay?'':g.mode==='journey'?((tracked?stationBearing(tracked,g.journey)+'\n':'')+(g.crew.duty==='helm'?'Astra · '+g.crew.flightOrder.stage+' → '+g.journey.target.name+'\n':'')+(g.journey.alt<5?(sector%4===2?'Cloud skimming':'Surface drive'):'Free flight')+' · '+(g.journey.alt<1000?Math.round(g.journey.alt)+' m':Math.round(g.journey.alt/1000).toLocaleString()+' km')+' altitude · '+Math.round(g.journey.v.length()).toLocaleString()+' m/s'):nav?('Orbit · '+Math.round(nav.altitude/1000)+' km　 '+(nav.speed/1000).toFixed(2)+' km/s　 ×'+g.trajectory.warp+'\nPeriapsis '+Math.round(nav.periapsis/1000)+' km  /  Apoapsis '+(Number.isFinite(nav.apoapsis)?Math.round(nav.apoapsis/1000)+' km':'escape')):g.mode==='survey'?(surveyStatus(g.survey)+(g.crew.duty==='survey'?' · Astra piloting':'')):g.mode==='deck'?'Forward helm · '+Math.max(0,Math.ceil(g.z+4))+' m':('Hull '+g.hp+'/'+ships[g.ship].hull+'　 Patrol '+g.enemies.length+'　 Spirit '+(recharge?Math.ceil(recharge)+'s':'ready'));
+  const portStatus=g.mode==='journey'?harborStatus(harborFor(g.journey.body,relief),g.journey):null;
+  const h=overlay?'':g.mode==='journey'?((portStatus&&g.journey.harborApproach?'N-04 APPROACH · '+Math.round(portStatus.range)+' m range · '+Math.round(portStatus.height)+' m deck clearance\n':'')+(tracked?stationBearing(tracked,g.journey)+'\n':'')+(g.crew.duty==='helm'?'Astra · '+g.crew.flightOrder.stage+' → '+g.journey.target.name+'\n':'')+(g.journey.alt<5?(sector%4===2?'Cloud skimming':'Surface drive'):'Free flight')+' · '+(g.journey.alt<1000?Math.round(g.journey.alt)+' m':Math.round(g.journey.alt/1000).toLocaleString()+' km')+' altitude · '+Math.round(g.journey.v.length()).toLocaleString()+' m/s'):nav?('Orbit · '+Math.round(nav.altitude/1000)+' km　 '+(nav.speed/1000).toFixed(2)+' km/s　 ×'+g.trajectory.warp+'\nPeriapsis '+Math.round(nav.periapsis/1000)+' km  /  Apoapsis '+(Number.isFinite(nav.apoapsis)?Math.round(nav.apoapsis/1000)+' km':'escape')):g.mode==='survey'?(surveyStatus(g.survey)+(g.crew.duty==='survey'?' · Astra piloting':'')):g.mode==='deck'?'Forward helm · '+Math.max(0,Math.ceil(g.z+4))+' m':('Hull '+g.hp+'/'+ships[g.ship].hull+'　 Patrol '+g.enemies.length+'　 Spirit '+(recharge?Math.ceil(recharge)+'s':'ready'));
   if(h!==hud){hud=h;$('hud').textContent=h}
   label('location',g.world.name+' / '+ships[g.ship].name);
   label('help',overlay?'':g.mode==='journey'?'W/S · Drive　 A/D · Turn　 I/K · Pitch　 U/J · Lift　 F · Bearing　 V · Cam':g.mode==='survey'?'W/S · Thrust　 A/D · Turn　 U/J · Climb / descend　 F · Orbit　 V · Cam':g.mode==='navigation'?'W/S · Prograde / retrograde　 A/D · Radial burn　 F · Patrol':g.mode==='deck'?'WASD / arrows · Walk　 Drag · Look　 F · Helm':'WASD / arrows · Fly　 Space · Fire　 E · Spirit　 F · Claim　 V · Cam');
