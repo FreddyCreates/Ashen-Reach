@@ -2,6 +2,8 @@
 import {harborFor,harborMesh} from './hearth-harbor.mjs';
 import {stationMesh,stationDistance} from './field-station.mjs';
 import {Vector3} from './three.module.js';
+import {bedrock,relief,surfaceColor} from './planet-geography.mjs';
+export {relief} from './planet-geography.mjs';
 import {ImprovedNoise} from './ImprovedNoise.mjs';
 import {surveyProfile} from './survey.mjs';
 import {world,cycle} from './universe.mjs';
@@ -11,12 +13,7 @@ export function bodies(id){
  return Array.from({length:4},(_,k)=>({id:first+k,name:world(first+k,cycle()).name,r:surveyProfile(first+k).radius,
  center:V([0,1.4e8,3.3e8,-1.2e8][k],[0,1e7,-4e7,6e7][k],[0,-1e8,-2e8,-2.7e8][k])}))
 }
-export function relief(body,n){
- const id=body.id, f=id%4;if(f===2)return 0;
- const h=(freq)=>noise.noise(n.x*freq+id*.71,n.y*freq+3,n.z*freq);
- const raw=2700*h(3)+890*h(17)+210*h(81)+43*h(390)+11*h(2000)+2*h(9700)+.36*h(46000);
- return f===0?raw:Math.max(0,raw)
-}
+
 export function newJourney(id){
  const system=bodies(id),home=system[id%4];
  return {system,body:home,p:home.center.clone().add(V(0,0,home.r*2.9)),v:V(),forward:V(0,0,-1),right:V(1,0,0),target:home,cruise:true,aim:true,alt:home.r*1.9}
@@ -74,7 +71,7 @@ function tile(b,f,u,v,w){
  const a=[];
  const theme=worldThemes[b.id%4];
  for(let j=0;j<=4;j++)for(let i=0;i<=4;i++){
-  const n=faces[f](u+w*i/4,v+w*j/4).normalize(),h=relief(b,n);
+  const n=faces[f](u+w*i/4,v+w*j/4).normalize(),h=bedrock(b,n),surface=relief(b,n);
   const band=noise.noise(n.x*12+b.id,n.y*12,n.z*12);
   const microNoise=w<.01?noise.noise(n.x*1800+b.id*3,n.y*1800,n.z*1800):0;
   
@@ -89,39 +86,11 @@ function tile(b,f,u,v,w){
       Math.round(theme.rock[1]*(1-t)+theme.light[1]*t+band*18),
       Math.round(theme.rock[2]*(1-t)+theme.light[2]*t)
     ];
-  } else if(theme.sea&&h<=0){
-    // Real ocean with depth gradient, shallows, and coastal shelf
-    const depth=Math.max(0,Math.min(1,-h/220));
-    color=[
-      Math.round(theme.water[0]*(1-depth*.4)+depth*12),
-      Math.round(theme.water[1]*(1-depth*.3)+depth*22),
-      Math.round(theme.water[2]*(1-depth*.2)+depth*38)
-    ];
-  } else {
-    // Terrestrial continent elevation and biome tinting
-    const elev=Math.max(0,Math.min(1,h/3400));
-    const polar=Math.abs(n.y);
-    if(polar>0.82){
-      // Polar icecaps on high-latitude terrain
-      const ice=Math.min(1,(polar-0.82)*6);
-      color=[
-        Math.round(theme.light[0]*(1-ice)+240*ice),
-        Math.round(theme.light[1]*(1-ice)+245*ice),
-        Math.round(theme.light[2]*(1-ice)+252*ice)
-      ];
-    } else {
-      const t=Math.max(0,Math.min(1,elev*.7+band*.3+microNoise*.15));
-      color=[
-        Math.round(theme.rock[0]*(1-t)+theme.light[0]*t),
-        Math.round(theme.rock[1]*(1-t)+theme.light[1]*t),
-        Math.round(theme.rock[2]*(1-t)+theme.light[2]*t)
-      ];
-    }
-  }
+  } else { color=surfaceColor(b,n,h,theme); }
 
   const sun=V(-.55,.44,.69).normalize(),tangent=sun.clone().addScaledVector(n,-sun.dot(n));
   const step=Math.max(8,b.r*w/8),sample=n.clone().addScaledVector(tangent,step/b.r).normalize();
-  const slope=(relief(b,sample)-h)/step;
+  const slope=(relief(b,sample)-surface)/step;
   const grain=noise.noise(n.x*59000,n.y*59000,n.z*59000);
   
   // Specular gleam on ocean waters when facing sun reflection
@@ -133,7 +102,7 @@ function tile(b,f,u,v,w){
 
   const light=.35+.74*Math.max(0,Math.min(1,n.dot(sun)-slope))+(w<.004?.07*grain:0);
   a.push({
-    p:n.multiplyScalar(b.r+h).add(b.center),
+    p:n.multiplyScalar(b.r+surface).add(b.center),
     c:color.map((k,ci)=>Math.min(255,Math.max(0,Math.round(k*light+band*12+(ci===1||ci===2?spec:spec*.6)))))
   });
  }

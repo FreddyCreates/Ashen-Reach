@@ -5,6 +5,7 @@ import {landingEntries} from './landing-atlas.mjs';
 import {stationFor,stationDistance,stationBearing,buildStation,serviceAvailable,serviceHull,serviceRack} from './field-station.mjs';
 import {restoreCampaign,episode,acceptSignal,fitRepeater,blockadeActive,clearBlockade,broadcast,factions,salePremium,spiritCooldown} from './campaign.mjs';
 import {boardNavigator,assignLanding,checkpoint,resumeLanding,relieveNavigator,advanceLanding} from './crew-operations.mjs';
+import {toJourney} from './planet-geography.mjs';
 import {newJourney,travel,drawJourney,relief} from './deep-flight.mjs';
 import {newLedger,extract,capacity,quote,resources,sell,upgrade} from './mining.mjs';
 import {activeMarketManifest,marketInventory,createMarketManifest,settleMarketManifest,cancelMarketManifest} from './market-manifest.mjs';
@@ -244,7 +245,9 @@ function rememberOrbit(){
  if(g.mode==='flight')previousFlight={worldId:g.world.id,x:g.x,z:g.z,enemies:g.enemies,shots:g.shots,impacts:g.impacts,spirit:g.spirit}
 }
 function survey(){
- rememberOrbit();g.mode='survey';g.survey=createSurvey(g.world.id,g.ship);unpause();
+ const origin=g.mode==='journey'&&g.journey?.alt<3500?g.journey:null;
+ if(origin){takeHelm();origin.harborApproach=false;}
+ rememberOrbit();g.mode='survey';g.survey=createSurvey(g.world.id,g.ship,origin);unpause();
  tell('Steer with the stick. Hold climb or descend to change clearance.');
  comms.say('Astra [Sensors]', `Surface survey grid activated. Mineral resonance scanner online.`, 'normal', 'survey');
 }
@@ -253,6 +256,7 @@ function transfer(){
  tell('Forward burns prograde. Back lowers your orbit. Left and right apply radial thrust.')
 }
 function returnFlight(){
+ if(g.mode==='survey'&&g.survey?.frame&&g.journey&&toJourney(g.survey,g.journey)){g.mode='journey';unpause();tell('Continuing flight from survey coordinates.');return}
  if(previousFlight?.worldId===g.world.id){
   Object.assign(g,previousFlight);previousFlight=null;g.mode='flight';unpause()
  }else launch()

@@ -1,3 +1,4 @@
+import {localHeight,localCoordinates,fromJourney} from './planet-geography.mjs';
 import {landingSite,regionalElevation} from './survey-atlas.mjs';
 
 // Survey coordinates use metres, seconds and kilograms in a local tangent frame.
@@ -29,7 +30,8 @@ function noise(x,z,seed){
  const high=hash(ix,iz+1,seed)*(1-a)+hash(ix+1,iz+1,seed)*a;
  return low*(1-b)+high*b
 }
-export function surveyHeight(id,x,z){
+export function surveyHeight(id,x,z,frame=null){
+ if(frame)return localHeight(frame,x,z);
  const form=id%4;
  const xx=x+id*1731,zz=z-id*985;
  const broad=noise(xx/2300,zz/2300,id+41);
@@ -43,8 +45,8 @@ export function surveyHeight(id,x,z){
  if(form===0)return region+raw*.84+4*Math.sin(raw*.12)*(.3+fold*.7);
  return region+raw*(form===1?.92:1.07)-(form===1?365:405)
 }
-export function terrainContact(id,x,z){
- const h=surveyHeight(id,x,z);
+export function terrainContact(id,x,z,frame=null){
+ const h=surveyHeight(id,x,z,frame);
  return surveyProfile(id).sea?Math.max(0,h):h
 }
 function siteFor(id,index,x,z){
@@ -52,20 +54,23 @@ function siteFor(id,index,x,z){
  const length=index===0?720:680+hash(index,id,834)*720;
  return {x:x+Math.sin(a)*length,z:z-Math.cos(a)*length}
 }
-export function createSurvey(id,shipIndex){
+export function createSurvey(id,shipIndex,journey=null){
  if(!Number.isSafeInteger(id)||id<0||!hulls[shipIndex])throw Error('Unknown survey destination or hull');
  const profile=surveyProfile(id),x=0,z=0;
+ const origin=journey?.body.id===id&&!profile.gas?fromJourney(journey):null;
  const altitude=terrainContact(id,x,z)+(profile.gas?90:98);
- return {id,ship:shipIndex,x,z,y:altitude,vx:0,vy:0,vz:-15,yaw:0,bank:0,
+ const state={id,ship:shipIndex,x,z,y:altitude,vx:0,vy:0,vz:-15,yaw:0,bank:0,
    yawRate:0,pitch:-.17,clock:0,remainder:0,landed:false,clearance:altitude-terrainContact(id,x,z),
    scans:0,scanTime:0,site:siteFor(id,0,x,z),message:'',messageUntil:0};
+ if(origin){Object.assign(state,origin);state.clearance=state.y-terrainContact(id,x,z,state.frame);}
+ return state;
 }
 function step(s,h,input){
  const p=surveyProfile(s.id),hull=hulls[s.ship];
  const turn=clamp(Number(input.turn)||0,-1,1),drive=clamp(Number(input.throttle)||0,-1,1);
  const lift=clamp(Number(input.lift)||0,-1,1);
  s.clock+=h;
- const ground=terrainContact(s.id,s.x,s.z),agl=s.y-ground;
+ const ground=terrainContact(s.id,s.x,s.z,s.frame),agl=s.y-ground;
  s.yawRate+=(turn*hull.turn-s.yawRate)*(1-Math.exp(-h*2.8));s.yaw+=s.yawRate*h;
  s.bank+=(-s.yawRate*.32-s.bank)*(1-Math.exp(-h*4));
  const acceleration=drive*hull.thrust/hull.mass;
@@ -82,7 +87,7 @@ function step(s,h,input){
  const verticalThrust=clamp(grav+1.3*(climb+pressureRecovery+ceilingRecovery-s.vy),0,grav+hull.thrust/hull.mass);
  s.vy+=(verticalThrust-grav-drag*s.vy)*h;
  s.x+=s.vx*h;s.y+=s.vy*h;s.z+=s.vz*h;
- const floor=terrainContact(s.id,s.x,s.z);s.clearance=s.y-floor;
+ const floor=terrainContact(s.id,s.x,s.z,s.frame);s.clearance=s.y-floor;
  if(!p.gas&&s.clearance<=2.5){
   s.y=floor+2.5;s.clearance=2.5;
   if(s.vy < -7&&!s.landed){s.message='Landing struts absorbed impact';s.messageUntil=s.clock+2.5}
@@ -108,6 +113,7 @@ export function surveyStatus(s){
  const level=s.landed?'Ground contact':(p.gas?'Cloud clearance ':'Terrain clearance ')+Math.round(s.clearance)+' m';
  const site=landingSite(s.id),lat=clamp(site.latitude-s.z/p.radius*180/Math.PI,-90,90);
  const lon=((site.longitude+s.x/(p.radius*Math.max(.02,Math.cos(lat*Math.PI/180)))*180/Math.PI+540)%360)-180;
- const coords=Math.abs(lat).toFixed(2)+'°'+(lat<0?'S':'N')+' '+Math.abs(lon).toFixed(2)+'°'+(lon<0?'W':'E');
+ const actual=s.frame?localCoordinates(s.frame,s.x,s.z):{latitude:lat,longitude:lon};
+ const coords=Math.abs(actual.latitude).toFixed(2)+'°'+(actual.latitude<0?'S':'N')+' '+Math.abs(actual.longitude).toFixed(2)+'°'+(actual.longitude<0?'W':'E');
  return p.name+' · '+coords+' · '+level+' · '+Math.round(spd)+' m/s\n'+(s.clock<s.messageUntil?s.message:'Beacon '+dir+' · '+Math.round(Math.hypot(dx,dz))+' m')+' · '+s.scans+' scanned'
 }
