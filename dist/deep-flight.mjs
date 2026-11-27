@@ -60,16 +60,83 @@ const stars=Array.from({length:1100},(_,i)=>{
  return V(r*Math.cos(angle),y,r*Math.sin(angle))
 });
 
+// Color palettes for worlds from surveyProfile
+const worldThemes=[
+ {sea:false,water:[108,83,62],rock:[140,94,68],light:[220,173,121],dark:[80,61,59],haze:[211,173,137],zenith:[38,62,89]},
+ {sea:true,water:[41,106,121],rock:[66,102,84],light:[189,172,130],dark:[51,76,69],haze:[190,211,207],zenith:[25,71,107]},
+ {sea:false,gas:true,water:[170,136,157],rock:[161,128,144],light:[237,210,190],dark:[112,87,109],haze:[221,192,193],zenith:[52,40,63]},
+ {sea:true,water:[57,108,114],rock:[88,92,73],light:[164,161,126],dark:[54,71,54],haze:[189,208,187],zenith:[41,79,92]}
+];
+
 function tile(b,f,u,v,w){
  const key=[b.id,f,u,v,w].join(':');if(cache.has(key))return cache.get(key);
- const a=[];for(let j=0;j<=4;j++)for(let i=0;i<=4;i++){const n=faces[f](u+w*i/4,v+w*j/4).normalize(),h=relief(b,n);
- const band=noise.noise(n.x*12+b.id,n.y*12,n.z*12);let color=b.id%4===2?[163+31*Math.sin(n.y*36+band*3),127+25*band,141+18*band]:h===0?[34,91,105]:b.id%4===0?[170+h*.018,115+h*.016,79+h*.014]:[98+h*.04,123+h*.017,82+h*.027];
- const sun=V(-.55,.44,.69).normalize(),tangent=sun.clone().addScaledVector(n,-sun.dot(n));
- const step=Math.max(8,b.r*w/8),sample=n.clone().addScaledVector(tangent,step/b.r).normalize();
- const slope=(relief(b,sample)-h)/step;
- const grain=noise.noise(n.x*59000,n.y*59000,n.z*59000);
- const light=.35+.74*Math.max(0,Math.min(1,n.dot(sun)-slope))+(w<.004?.07*grain:0);a.push({p:n.multiplyScalar(b.r+h).add(b.center),c:color.map(k=>Math.min(255,Math.max(0,k*light+band*15))|0)})}
- if(cache.size>5200)cache.clear();cache.set(key,a);return a
+ const a=[];
+ const theme=worldThemes[b.id%4];
+ for(let j=0;j<=4;j++)for(let i=0;i<=4;i++){
+  const n=faces[f](u+w*i/4,v+w*j/4).normalize(),h=relief(b,n);
+  const band=noise.noise(n.x*12+b.id,n.y*12,n.z*12);
+  const microNoise=w<.01?noise.noise(n.x*1800+b.id*3,n.y*1800,n.z*1800):0;
+  
+  let color;
+  if(theme.gas){
+    // Sophisticated banded gas giant with storm spirals and convective swirls
+    const swirl=noise.noise(n.x*24+band*4,n.y*48,n.z*24);
+    const latBand=Math.sin(n.y*38+band*3.2+swirl*1.8);
+    const t=Math.max(0,Math.min(1,.5+.5*latBand+.2*band));
+    color=[
+      Math.round(theme.rock[0]*(1-t)+theme.light[0]*t+swirl*14),
+      Math.round(theme.rock[1]*(1-t)+theme.light[1]*t+band*18),
+      Math.round(theme.rock[2]*(1-t)+theme.light[2]*t)
+    ];
+  } else if(theme.sea&&h<=0){
+    // Real ocean with depth gradient, shallows, and coastal shelf
+    const depth=Math.max(0,Math.min(1,-h/220));
+    color=[
+      Math.round(theme.water[0]*(1-depth*.4)+depth*12),
+      Math.round(theme.water[1]*(1-depth*.3)+depth*22),
+      Math.round(theme.water[2]*(1-depth*.2)+depth*38)
+    ];
+  } else {
+    // Terrestrial continent elevation and biome tinting
+    const elev=Math.max(0,Math.min(1,h/3400));
+    const polar=Math.abs(n.y);
+    if(polar>0.82){
+      // Polar icecaps on high-latitude terrain
+      const ice=Math.min(1,(polar-0.82)*6);
+      color=[
+        Math.round(theme.light[0]*(1-ice)+240*ice),
+        Math.round(theme.light[1]*(1-ice)+245*ice),
+        Math.round(theme.light[2]*(1-ice)+252*ice)
+      ];
+    } else {
+      const t=Math.max(0,Math.min(1,elev*.7+band*.3+microNoise*.15));
+      color=[
+        Math.round(theme.rock[0]*(1-t)+theme.light[0]*t),
+        Math.round(theme.rock[1]*(1-t)+theme.light[1]*t),
+        Math.round(theme.rock[2]*(1-t)+theme.light[2]*t)
+      ];
+    }
+  }
+
+  const sun=V(-.55,.44,.69).normalize(),tangent=sun.clone().addScaledVector(n,-sun.dot(n));
+  const step=Math.max(8,b.r*w/8),sample=n.clone().addScaledVector(tangent,step/b.r).normalize();
+  const slope=(relief(b,sample)-h)/step;
+  const grain=noise.noise(n.x*59000,n.y*59000,n.z*59000);
+  
+  // Specular gleam on ocean waters when facing sun reflection
+  let spec=0;
+  if(theme.sea&&h<=0){
+    const half=sun.clone().add(n).normalize();
+    spec=Math.pow(Math.max(0,n.dot(half)),16)*65;
+  }
+
+  const light=.35+.74*Math.max(0,Math.min(1,n.dot(sun)-slope))+(w<.004?.07*grain:0);
+  a.push({
+    p:n.multiplyScalar(b.r+h).add(b.center),
+    c:color.map((k,ci)=>Math.min(255,Math.max(0,Math.round(k*light+band*12+(ci===1||ci===2?spec:spec*.6)))))
+  });
+ }
+ if(cache.size>12000)cache.clear();cache.set(key,a);return a
 }
 let canvas,ctx,last=0,gl,buffer;
 function initRenderer(){
@@ -104,12 +171,21 @@ export function drawJourney(s,now,station=null){
  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(dots),gl.DYNAMIC_DRAW);gl.drawArrays(gl.POINTS,0,dots.length/6)
  }
  function visit(b,f,u,v,size,lvl){
- const n=faces[f](u+size/2,v+size/2).normalize(),cam=s.p.clone().sub(b.center),mid=n.clone().multiplyScalar(b.r+(lvl>7?relief(b,n):0)).sub(cam),dist=mid.length(),span=size*b.r;
- if(cam.length()>b.r&&n.dot(cam.clone().normalize())+size*1.5<b.r/cam.length()-.002)return;
- const z=mid.dot(s.forward);if(z+span*1.6<0||Math.abs(mid.dot(s.right))>Math.max(0,z)*w/(2*focal)+span*1.6||Math.abs(mid.dot(up))>Math.max(0,z)*h/(2*focal)+span*1.6)return;
- if(lvl<23&&span>Math.max(2,dist*.48)){const d=size/2;for(let j=0;j<2;j++)for(let i=0;i<2;i++)visit(b,f,u+i*d,v+j*d,d,lvl+1);return}
- const points=tile(b,f,u,v,size).map(q=>{const p=q.p.clone().sub(s.p),z=p.dot(s.forward);return {x:w/2+p.dot(s.right)*focal/z,y:h/2-p.dot(up)*focal/z,z,c:q.c}});
- for(let j=0;j<4;j++)for(let i=0;i<4;i++){const k=j*5+i;for(const ids of [[k,k+1,k+6],[k,k+6,k+5]]){const [a,b,c]=ids.map(i=>points[i]);if(Math.min(a.z,b.z,c.z)<.15)continue;tri.push([a,b,c,a.z+b.z+c.z])}}
+  const n=faces[f](u+size/2,v+size/2).normalize(),cam=s.p.clone().sub(b.center),mid=n.clone().multiplyScalar(b.r+(lvl>7?relief(b,n):0)).sub(cam),dist=mid.length(),span=size*b.r;
+  if(cam.length()>b.r&&n.dot(cam.clone().normalize())+size*1.5<b.r/cam.length()-.002)return;
+  const z=mid.dot(s.forward);if(z+span*1.6<0||Math.abs(mid.dot(s.right))>Math.max(0,z)*w/(2*focal)+span*1.6||Math.abs(mid.dot(up))>Math.max(0,z)*h/(2*focal)+span*1.6)return;
+  // Dynamic planetary expansion LOD: subdivide deeper as the camera approaches surface
+  if(lvl<23&&span>Math.max(1.2,dist*.36)){const d=size/2;for(let j=0;j<2;j++)for(let i=0;i<2;i++)visit(b,f,u+i*d,v+j*d,d,lvl+1);return}
+  const theme=worldThemes[b.id%4];
+  const points=tile(b,f,u,v,size).map(q=>{
+    const p=q.p.clone().sub(s.p),z=p.dot(s.forward);
+    // Distance-based atmospheric scattering haze for realistic planetary approach
+    const atmoDepth=Math.max(0,1-(p.length()-b.r*0.01)/(b.r*0.4));
+    const fogFactor=Math.min(0.65,atmoDepth*0.75);
+    const col=q.c.map((val,ci)=>Math.round(val*(1-fogFactor)+theme.haze[ci]*fogFactor));
+    return {x:w/2+p.dot(s.right)*focal/z,y:h/2-p.dot(up)*focal/z,z,c:col};
+  });
+  for(let j=0;j<4;j++)for(let i=0;i<4;i++){const k=j*5+i;for(const ids of [[k,k+1,k+6],[k,k+6,k+5]]){const [a,b,c]=ids.map(i=>points[i]);if(Math.min(a.z,b.z,c.z)<.15)continue;tri.push([a,b,c,a.z+b.z+c.z])}}
  }
  for(const b of s.system)for(let f=0;f<6;f++)visit(b,f,-1,-1,2,0);
  if(stationDistance(station,s)<16000){

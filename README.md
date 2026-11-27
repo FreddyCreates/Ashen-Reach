@@ -20,7 +20,30 @@ space.mjs owns captain state, deck movement, combat, chart navigation, and local
 Run node server/observatory.mjs with PORT and STATE_DIR set for a persistent single-writer service. It advances independently of browsers and atomically publishes a frontier checkpoint. GET /api/frontier and GET /api/worlds/0 return the clock and governors. Static hosting computes the same simulation from its clock. The observatory is optional and is not an authoritative ownership server.
 
 ## Verification
-Run node --test test/*.mjs. This release uses deterministic game AI. Shared player identity, competitive ownership arbitration, economy balancing, store packaging and device certification remain release work.
+Run `node --test test/*.mjs`. This release includes comprehensive tests for deterministic celestial physics, mining ledgers, campaign state, embodied Astra pilot neural weights, 3D mesh budgets, the WebAudio procedural sound synthesizer, and the AI agent harness.
+
+## AI Engine & Agent Harness ("Embodied AI & For AI")
+- **Embodied Tactical Crew**: Astra actively analyzes sensory telemetry, providing real-time voice and tactical radio comms (`comms.say(...)`), terrain collision warnings, and combat advice.
+- **Autonomous Policies**: Astra features autonomous planetary approach and landing with a 64-node neural network controller (`dist/pilot-weights.mjs`) and autonomous dogfighting policy.
+- **Open AI Agent Harness (`window.AshenReachAI`)**:
+  - `AshenReachAI.getPerception()`: Emits structured telemetry (3D coordinates, velocities, nearest planetary bodies, radar contacts, and threats).
+  - `AshenReachAI.step(action)`: Accepts programmatic control signals (`{turn, throttle, lift, pitch, fire, summon}`).
+  - `AshenReachAI.setAutopilot('combat' | 'survey' | 'transit')`: Enables autonomous gameplay agents.
+  - Live AI Neural Telemetry HUD: Real-time visualizer displaying sensory radar and 64-node neural network activations.
+
+## Next-Gen Visuals & Audio Engine
+- **Atmospheric Scattering**: Dynamic Rayleigh/Mie limb scattering that shifts with sun direction and planet composition.
+- **Volumetric Starfield & Cosmic Nebula**: Multi-layered spectral stars with scintillation and procedural nebula backdrops.
+- **Dynamic Thruster Particles & VFX**: Ion exhaust sparks, kinetic recoil camera trauma shake, shield deflection ripples, and muzzle flares.
+- **Cockpit HUD & Dual Camera Modes**: First-person cockpit pilot perspective and 3rd-person chase camera with lead target reticles and pitch ladders (press `V` to toggle).
+- **Procedural WebAudio Synthesizer**: Zero-asset procedural audio system generating dynamic thruster hum, laser chirps, explosion rumbles, sacred spirit chimes, warp sweeps, and ambient space music.
+
+## Expanding Planetary Worlds & Sophisticated Spheres
+- **Continuous Planetary Expansion (Seamless Scale Growth)**: As ships descend from deep space or orbital cruise toward any world, planetary bodies scale organically with adaptive quadtree level-of-detail (LOD) up to 23 levels of subdivision. The planet genuinely feels like an expanding world rather than a flat billboard.
+- **Biome & Ocean Specular Rendering**: Rich per-vertex planetary shader coloring distinguishes deep oceans, coastal shelves, elevation-tinted continental rock strata, polar frost caps, and convective gas-giant storm bands. High-glance sun angles produce real ocean specular glints.
+- **Dual-Layer Convective Clouds**: Dual-altitude independently rotating cloud and cirrus decks provide depth to planetary atmospheres from orbit.
+- **Ultra-Wide Horizon Surface Survey LOD**: Surface exploration features four nested continuous detail rings up to 12.3 km horizon radius, rendering expansive planetary vistas with micro-grain ripples, rock debris, and atmospheric distance haze.
+- **Atmospheric Descent Transition**: Direct contextual descent transition corridors from orbital flight into surface survey flight mode.
 
 ## Fleet graphics
 

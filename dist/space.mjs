@@ -10,16 +10,34 @@ import {createSurvey,advanceSurvey,surveyStatus} from './survey.mjs';
 import {createTrajectory,stepTrajectory,orbitReadout,showTrajectory} from './orbital-flight.mjs';
 import {openFreeport} from './freeroam.mjs';
 import {ships,world,cycle,frontier} from './universe.mjs';
-import {render} from './space-view.mjs';
+import {render,cameraMode,setCameraMode,addCameraShake} from './space-view.mjs';
+import {audio} from './audio-engine.mjs';
+import {comms,AgentHarness} from './ai-engine.mjs';
+
 const $=id=>document.getElementById(id),key='ashen-reach.captain.v1';
 let save={ship:0,sector:0,claims:[]};
 try{const v=JSON.parse(localStorage.getItem(key));if(v&&ships[v.ship]&&Number.isSafeInteger(v.sector)&&v.sector>=0&&Array.isArray(v.claims))save={ship:v.ship,sector:v.sector,claims:v.claims.filter(Number.isSafeInteger)}}catch{}
 function persist(){try{localStorage.setItem(key,JSON.stringify(save))}catch{tell('Storage unavailable. This voyage lasts for this session.')}}
 let tick=cycle(),sector=Math.min(save.sector,frontier(tick)-1),g={impacts:[],ship:save.ship,mode:'hangar',world:world(sector,tick),x:0,z:2,bank:0,spirit:0,enemies:[],shots:[],hp:ships[save.ship].hull};
 let keys=new Set(),axis=[0,0],finger=null,overlay=true,fire=0,recharge=0,enemyFire=1,spiritFire=0,clock=0,notice=0,page=0;
-function tell(msg){$('feedback').textContent=msg;notice=3}
-function button(label,fn,parent){const b=document.createElement('button');b.textContent=label;b.onclick=fn;parent.append(b);return b}
-function stop(){keys.clear();axis=[0,0];finger=null;$('stick').firstElementChild.style.transform=''}
+
+// Initialize AI Harness and make accessible globally for AI agents
+const aiHarness = new AgentHarness(g);
+if(typeof window!=='undefined'){
+  window.AshenReachAI=aiHarness;
+  window.AshenAudio=audio;
+  window.AshenComms=comms;
+}
+
+function tell(msg){$('feedback').textContent=msg;notice=3.2}
+function button(label,fn,parent){
+  const b=document.createElement('button');b.textContent=label;
+  b.onclick=e=>{
+    audio.resume();audio.uiClick('click');fn(e);
+  };
+  parent.append(b);return b;
+}
+function stop(){keys.clear();axis=[0,0];finger=null;const s=$('stick');if(s&&s.firstElementChild)s.firstElementChild.style.transform=''}
 function panel(title,body,options){stop();$('panel').classList.remove('fleet-selector','campaign-brief');$('panel').querySelector('small').textContent='SPIRIT FLEET';$('feedback').textContent='';overlay=true;$('panel').hidden=false;$('controls').hidden=true;$('heading').textContent=title;$('body').textContent=body;$('choices').replaceChildren();for(const [label,fn] of options)button(label,fn,$('choices'))}
 const hullNotes=[
  'Swept wings and twin drives keep this interceptor light on its feet.',
@@ -40,7 +58,10 @@ function hangar(){
  $('choices').append(pick);
  const row=document.createElement('div');row.className='launch-row';const stats=document.createElement('span');
  stats.textContent=ship.hull+' hull  /  '+ship.speed+' flight speed';row.append(stats);
- button('Board '+ship.name,()=>{save.ship=g.ship;persist();g.hp=ship.hull;deck()},row);$('choices').append(row)
+ button('Board '+ship.name,()=>{
+   audio.resume();audio.warpJump();
+   save.ship=g.ship;persist();g.hp=ship.hull;deck();
+ },row);$('choices').append(row)
 }
 function unpause(){stop();overlay=false;$('panel').hidden=true;$('controls').hidden=false;actions()}
 function deck(){g.yaw=0;g.pitch=-.02;g.mode='deck';boardNavigator(g.crew,g.ship);receipt('Boarded vessel');g.x=0;g.z=4;g.shots=[];g.enemies=[];g.spirit=0;unpause();tell('Walk forward to the illuminated helm.')}
@@ -50,16 +71,20 @@ function launch(){
   if(!restored&&g.crew.duty==='helm'){relieveNavigator(g.crew);receipt('Flight order released after system change')}
   g.journey=restored||newJourney(sector);
  }
+ audio.warpJump();
  g.mode='journey';unpause();tell('Push forward to approach. Steer to explore. Hold Climb to lift off.');
+ comms.say('Astra [Navigator]', `Free flight initiated in ${g.world.name} orbit. Standing by on sensors.`, 'normal', 'flight');
 }
 function selectDestination(){
  const s=g.journey;
  panel('Flight computer','Select a bearing. Hold forward to engage the cruise drive.',[
- ...s.system.map(b=>[b.name,()=>{takeHelm();s.target=b;s.aim=true;unpause()}]),['Manual steering',()=>{takeHelm();s.aim=false;unpause()}]])
+ ...s.system.map(b=>[b.name,()=>{takeHelm();s.target=b;s.aim=true;audio.uiClick('confirm');unpause()}]),['Manual steering',()=>{takeHelm();s.aim=false;unpause()}]])
 }
 function patrol(){previousFlight=null;g.blockadeLink=false;g.impacts=[];g.mode='flight';g.x=0;g.z=4;g.shots=[];g.spirit=0;fire=0;enemyFire=2;
  g.enemies=save.claims.includes(sector)&&!blockadeActive(ledger,sector)?[]:Array.from({length:Math.min(5,2+sector%4)},(_,i)=>({x:(i-1)*3,z:-7-i*1.6,base:-7-i*1.6,hp:3,phase:i*2}));
- unpause();tell(g.enemies.length?'Hostile patrol ahead. Align your ship and fire.':'Friendly orbit. Open the chart to travel.')}
+ unpause();tell(g.enemies.length?'Hostile patrol ahead. Align your ship and fire.':'Friendly orbit. Open the chart to travel.');
+ if(g.enemies.length)comms.say('Astra [Tactical]', `Warning: Orbital patrol detected. ${g.enemies.length} hostile signatures in firing arc.`, 'urgent', 'combat');
+}
 function chart(){const count=frontier(tick);page=Math.max(0,Math.min(page,Math.floor((count-1)/4)));const opts=[];for(let i=page*4;i<Math.min(count,page*4+4);i++){const w=world(i,tick);opts.push([w.name+(save.claims.includes(i)?' · claimed':''),()=>inspect(i)])}if(page>0)opts.push(['Previous',()=>{page--;chart()}]);if(page*4+4<count)opts.push(['Next',()=>{page++;chart()}]);opts.push(['Return',unpause]);panel('Star chart',count+' charted worlds · New frontier every eight colony cycles.',opts)}
 function inspect(i){const w=world(i,tick);panel(w.name,w.governor+' oversees '+w.population+' settlers, '+w.buildings[0]+' habitats, '+w.buildings[1]+' reactors and '+w.buildings[2]+' shipyards. Next project: '+w.next+'.',[[i===sector?'Enter orbit':'Jump to orbit',()=>{save.sector=sector=i;g.world=w;persist();launch()}],['Star chart',chart]])}
 const crewStorage={getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)};
@@ -81,7 +106,9 @@ function harvest(){
  if(!g.survey?.lastSample)return tell('Fly through a survey beacon below 160 m to locate a deposit.');
  const p=g.survey.lastSample;
  if(Math.hypot(g.survey.x-p.x,g.survey.z-p.z)>145||g.survey.clearance>160)return tell('Return within 145 m of the scanned deposit below 160 m.');
- tell(transact(()=>extract(ledger,sector,p.id)))
+ audio.impact(false);
+ tell(transact(()=>extract(ledger,sector,p.id)));
+ comms.say('Astra [Geology]', `Mineral sample extraction complete. Ferrite hold updated.`, 'normal', 'mine');
 }
 function fieldStation(message=''){
  const flight=g.mode==='journey'?g.journey:null;
@@ -188,7 +215,8 @@ function orderLanding(){
  panel('Astra · flight order','Choose a destination. Astra will take the helm, fly the approach and record the landing. Move the stick to take control.',[
  ...flight.system.map(body=>[body.name,()=>{
   assignLanding(g.crew,flight,g.ship,body.id);crewCheckpointAge=0;
-  receipt('Took helm for '+body.name);unpause();tell('Astra has the helm for '+body.name+'.')
+  receipt('Took helm for '+body.name);unpause();tell('Astra has the helm for '+body.name+'.');
+  comms.say('Astra [Helm]', `Landing sequence calculated for ${body.name}. Descent profile engaged.`, 'high', 'nav');
  }]),['Bridge',bridge]])
 }
 let districtOpen=false,previousFlight=null;
@@ -197,7 +225,8 @@ function rememberOrbit(){
 }
 function survey(){
  rememberOrbit();g.mode='survey';g.survey=createSurvey(g.world.id,g.ship);unpause();
- tell('Steer with the stick. Hold climb or descend to change clearance.')
+ tell('Steer with the stick. Hold climb or descend to change clearance.');
+ comms.say('Astra [Sensors]', `Surface survey grid activated. Mineral resonance scanner online.`, 'normal', 'survey');
 }
 function transfer(){
  rememberOrbit();g.mode='navigation';g.trajectory=createTrajectory(g.world,g.ship);unpause();
@@ -214,76 +243,354 @@ function freeport(){
  try{openFreeport({worldId:g.world.id,shipId:g.ship,onExchange:()=>{districtOpen=false;exchange()},onExit:()=>{districtOpen=false;bridge()}})}
  catch(error){districtOpen=false;bridge();tell('Freeport could not open.');console.error(error)}
 }
+
+function settingsMenu(){
+  panel('Ship Systems & AI Core', 'Configure audio synthesizers, camera perspectives, and embodied AI co-pilot behaviors.', [
+    [cameraMode==='chase'?'Camera: Chase Cam (Toggle)':'Camera: Cockpit Cam (Toggle)', ()=>{
+      const next = cameraMode==='chase'?'cockpit':'chase';
+      setCameraMode(next);
+      if($('view-toggle'))$('view-toggle').textContent='CAM: '+next.toUpperCase();
+      settingsMenu();
+    }],
+    ['Autopilot: '+(aiHarness.autopilotMode||'OFF').toUpperCase(), ()=>{
+      const modes=[null,'combat','transit'];
+      const next=modes[(modes.indexOf(aiHarness.autopilotMode)+1)%modes.length];
+      aiHarness.setAutopilot(next);
+      if($('ai-policy-badge'))$('ai-policy-badge').textContent='AUTOPILOT: '+(next||'OFF').toUpperCase();
+      settingsMenu();
+    }],
+    ['Audio: Toggle Mute', ()=>{
+      audio.setMuted(!audio.masterGain || audio.masterGain.gain.value > 0);
+      settingsMenu();
+    }],
+    ['AI Neural Visualizer (Toggle)', ()=>{
+      const el=$('ai-telemetry');
+      if(el)el.hidden=!el.hidden;
+      settingsMenu();
+    }],
+    ['Return to Bridge', bridge]
+  ]);
+}
+
 function bridge(){
  if(g.mode==='hangar'){hangar();return}
  panel(ships[g.ship].name+' bridge',g.world.name+' · '+save.claims.length+' claimed worlds on this device.',[
- ['Resume',unpause],['The Choir Line',campaignLog],['Free flight',launch],['Combat patrol',patrol],['Crew station',crewStation],['Field station',()=>fieldStation()],['Orbital navigation',transfer],['Surface survey',survey],['Enter freeport',freeport],['Star chart',chart],['Walk the deck',deck],['Change ship',hangar]])
+ ['Resume',unpause],['The Choir Line',campaignLog],['Free flight',launch],['Combat patrol',patrol],['Crew station',crewStation],['Field station',()=>fieldStation()],['Orbital navigation',transfer],['Surface survey',survey],['Enter freeport',freeport],['Star chart',chart],['Walk the deck',deck],['Settings & AI Core',settingsMenu],['Change ship',hangar]])
 }
-function summon(){if(recharge>0){tell('Spirit returns in '+Math.ceil(recharge)+'s');return}g.spirit=8;recharge=spiritCooldown(ledger,g.ship===2?13:21);spiritFire=0;if(g.enemies.length&&blockadeActive(ledger,sector)){g.blockadeLink=true;tell('Nine Lanterns identified. Clear the blockade.')}else tell('Your spirit has joined the battle.')}
-function interact(){if(g.mode==='journey'){selectDestination();return}if(g.mode==='survey'||g.mode==='navigation'){returnFlight();return}if(g.mode==='deck'){if(g.z>-4){tell('Approach the forward helm.');return}launch();return}if(g.enemies.length){tell('Clear the orbital patrol first.');return}if(!save.claims.includes(sector)){save.claims.push(sector);persist();tell(g.world.name+' claimed. Fleet repaired.');g.hp=ships[g.ship].hull;actions()}else chart()}
-function actions(){const a=$('actions');a.replaceChildren();if(g.mode==='journey'){
- for(const [label,key] of [['Climb','u'],['Descend','j'],['Pitch up','i'],['Pitch down','k']]){
- const b=button(label,()=>{},a);b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add(key)};b.onlostpointercapture=()=>keys.delete(key)
+function summon(){
+ if(recharge>0){tell('Spirit returns in '+Math.ceil(recharge)+'s');return}
+ audio.spiritSummon();addCameraShake(0.4);
+ g.spirit=8;recharge=spiritCooldown(ledger,g.ship===2?13:21);spiritFire=0;
+ if(g.enemies.length&&blockadeActive(ledger,sector)){
+   g.blockadeLink=true;tell('Nine Lanterns identified. Clear the blockade.');
+   comms.say('Ship Spirit', 'I remember the convoy roll call. The lost ships hear us.', 'urgent', 'spirit');
+ } else {
+   tell('Your spirit has joined the battle.');
+   comms.say('Astra [Spirit]', 'Spirit companion deployed. Autonomous combat shielding active.', 'high', 'spirit');
  }
- button('Extract',()=>{
- const s=g.journey;if(s.alt>30)return tell('Descend below 30 metres to collect local resources.');
- const local=s.p.clone().sub(s.body.center);
- const site='field/'+local.toArray().map(v=>Math.floor(v/250)).join('/');
- tell(transact(()=>extract(ledger,sector,site)))
- },a);button('Bearing',selectDestination,a);button(g.journey.cruise?'Cruise assist':'Newtonian',()=>{takeHelm();g.journey.cruise=!g.journey.cruise;actions()},a);return
- }if(g.mode==='navigation'){
- button('Time ×'+g.trajectory.warp,()=>{g.trajectory.warp=g.trajectory.warp===20?100:g.trajectory.warp===100?1:20;actions()},a);
- button('Descend',survey,a);button('Freeport',freeport,a);button('Patrol',patrol,a);return
- }if(g.mode==='survey'){
- for(const [label,key] of [['Climb','u'],['Descend','j']]){
- const b=button(label,()=>{},a);b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add(key)};b.onlostpointercapture=()=>keys.delete(key)
- }
- button('Extract',harvest,a);button('Return to orbit',returnFlight,a);return
- }if(g.mode==='deck'){button('Take helm',interact,a);button('The Choir Line',campaignLog,a);button('Chart',chart,a)}else{const b=button('Fire',()=>{if(!overlay)shoot()},a);b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add('fire')};b.onlostpointercapture=()=>keys.delete('fire');button('Spirit',summon,a);button(save.claims.includes(sector)?'Chart':'Claim',interact,a)}}
-function shoot(){if(fire>0)return;fire=ships[g.ship].fire;g.shots.push({x:g.x,z:g.z-1,dx:0,dz:-23,enemy:false})}
-function update(dt){clock+=dt;notice-=dt;if(notice<=0&&$('feedback').textContent)$('feedback').textContent='';const now=cycle();if(now!==tick){tick=now;g.world=world(sector,tick)}
- if(overlay)return;const x=axis[0]+Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft')),z=axis[1]+Number(keys.has('s')||keys.has('arrowdown'))-Number(keys.has('w')||keys.has('arrowup')),mag=Math.max(1,Math.hypot(x,z)),speed=g.mode==='deck'?3.8:ships[g.ship].speed;
+}
+function interact(){
+ if(g.mode==='journey'){selectDestination();return}
+ if(g.mode==='survey'||g.mode==='navigation'){returnFlight();return}
+ if(g.mode==='deck'){if(g.z>-4){tell('Approach the forward helm.');return}launch();return}
+ if(g.enemies.length){tell('Clear the orbital patrol first.');return}
+ if(!save.claims.includes(sector)){
+   save.claims.push(sector);persist();tell(g.world.name+' claimed. Fleet repaired.');
+   audio.uiClick('confirm');
+   g.hp=ships[g.ship].hull;actions()
+ } else chart()
+}
+function actions(){
+ const a=$('actions');a.replaceChildren();
  if(g.mode==='journey'){
- const s=g.journey;if(x||keys.has('i')||keys.has('k'))s.aim=false;
- const manual={turn:x/mag,drive:-z/mag,pitch:Number(keys.has('i'))-Number(keys.has('k')),lift:Number(keys.has('u'))-Number(keys.has('j'))};
- if(g.crew.duty==='helm'&&Object.values(manual).some(Boolean)){takeHelm();s.aim=false}
- if(g.crew.duty==='helm'){
-  const event=advanceLanding(g.crew,s,dt);
-  crewCheckpointAge+=dt;
-  if(event){recordCrew(g.crew,crewStorage,event,s.body.name,ships[g.ship].name);tell(event)}
-  else if(crewCheckpointAge>=3||s.body.id!==sector){saveCrewPose();crewCheckpointAge=0}
- }else travel(s,dt,manual);
- if(sector!==s.body.id){sector=save.sector=s.body.id;g.world=world(sector,tick);persist()}return
+  for(const [label,key] of [['Climb','u'],['Descend','j'],['Pitch up','i'],['Pitch down','k']]){
+   const b=button(label,()=>{},a);b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add(key)};b.onlostpointercapture=()=>keys.delete(key)
+  }
+  button('Extract',()=>{
+   const s=g.journey;if(s.alt>30)return tell('Descend below 30 metres to collect local resources.');
+   const local=s.p.clone().sub(s.body.center);
+   const site='field/'+local.toArray().map(v=>Math.floor(v/250)).join('/');
+   tell(transact(()=>extract(ledger,sector,site)))
+  },a);
+  button('Bearing',selectDestination,a);
+  if(g.journey.alt<3500){
+   button('Survey descent',()=>{
+    survey();
+    tell('Entering atmospheric survey corridor.');
+    comms.say('Astra [Transition]','Orbital descent confirmed. Engaging low-altitude survey grid.','high','survey');
+   },a);
+  }
+  button(g.journey.cruise?'Cruise assist':'Newtonian',()=>{takeHelm();g.journey.cruise=!g.journey.cruise;actions()},a);
+  return
  }
+ if(g.mode==='navigation'){
+  button('Time ×'+g.trajectory.warp,()=>{g.trajectory.warp=g.trajectory.warp===20?100:g.trajectory.warp===100?1:20;actions()},a);
+  button('Descend',survey,a);button('Freeport',freeport,a);button('Patrol',patrol,a);return
+ }
+ if(g.mode==='survey'){
+  for(const [label,key] of [['Climb','u'],['Descend','j']]){
+   const b=button(label,()=>{},a);b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add(key)};b.onlostpointercapture=()=>keys.delete(key)
+  }
+  button('Extract',harvest,a);button('Return to orbit',returnFlight,a);return
+ }
+ if(g.mode==='deck'){
+   button('Take helm',interact,a);button('The Choir Line',campaignLog,a);button('Chart',chart,a)
+ } else {
+   const b=button('Fire',()=>{if(!overlay)shoot()},a);
+   b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add('fire')};
+   b.onlostpointercapture=()=>keys.delete('fire');
+   button('Spirit',summon,a);
+   button(save.claims.includes(sector)?'Chart':'Claim',interact,a)
+ }
+}
+
+function shoot(){
+ if(fire>0)return;
+ fire=ships[g.ship].fire;
+ audio.laser(false);
+ addCameraShake(0.06);
+ g.shots.push({x:g.x,z:g.z-1,dx:0,dz:-23,enemy:false})
+}
+
+// Global action listeners for AI Agents
+window.addEventListener('ai-action-fire', ()=>{ if(!overlay)shoot(); });
+window.addEventListener('ai-action-summon', ()=>{ if(!overlay)summon(); });
+
+function update(dt){
+ clock+=dt;notice-=dt;
+ if(notice<=0&&$('feedback').textContent)$('feedback').textContent='';
+ const now=cycle();if(now!==tick){tick=now;g.world=world(sector,tick)}
+ 
+ // Step AI agent harness & comms checks
+ comms.checkAstra(g, clock);
+ aiHarness.updateAutopilot(dt);
+
+ if(overlay)return;
+ const x=axis[0]+Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft')),
+       z=axis[1]+Number(keys.has('s')||keys.has('arrowdown'))-Number(keys.has('w')||keys.has('arrowup')),
+       mag=Math.max(1,Math.hypot(x,z)),speed=g.mode==='deck'?3.8:ships[g.ship].speed;
+
+ // Audio engine hum update
+ const throttleRatio = Math.abs(z);
+ audio.updateEngine(throttleRatio, g.mode==='journey'?(g.journey?.v.length()||0)/10000:0.3, g.mode==='journey'&&g.journey?.cruise);
+
+ if(g.mode==='journey'){
+  const s=g.journey;if(x||keys.has('i')||keys.has('k'))s.aim=false;
+  const manual={turn:x/mag,drive:-z/mag,pitch:Number(keys.has('i'))-Number(keys.has('k')),lift:Number(keys.has('u'))-Number(keys.has('j'))};
+  if(g.crew.duty==='helm'&&Object.values(manual).some(Boolean)){takeHelm();s.aim=false}
+  if(g.crew.duty==='helm'){
+   const event=advanceLanding(g.crew,s,dt);
+   crewCheckpointAge+=dt;
+   if(event){recordCrew(g.crew,crewStorage,event,s.body.name,ships[g.ship].name);tell(event)}
+   else if(crewCheckpointAge>=3||s.body.id!==sector){saveCrewPose();crewCheckpointAge=0}
+  }else travel(s,dt,manual);
+  if(sector!==s.body.id){sector=save.sector=s.body.id;g.world=world(sector,tick);persist()}return
+ }
+
  const yaw=g.mode==='deck'?g.yaw:0,mx=Math.cos(yaw)*x+Math.sin(yaw)*z,mz=-Math.sin(yaw)*x+Math.cos(yaw)*z;
- if(g.mode==='survey'){const manual={turn:x/mag,throttle:-z/mag,lift:Number(keys.has('u'))-Number(keys.has('j'))};
- if(g.crew.duty==='survey'&&(x||z||manual.lift)){g.crew.duty='standby';receipt('Manual override')}
- const count=g.survey.scans,site=g.survey.site;advanceSurvey(g.survey,dt,g.crew.duty==='survey'?pilot(g.survey):manual);
- if(g.survey.scans>count){g.survey.lastSample={...site,id:count};if(g.crew.duty==='survey')harvest();if(g.crew.duty==='survey')g.crew.visits++;receipt('Survey logged')}return}
+ if(g.mode==='survey'){
+   const manual={turn:x/mag,throttle:-z/mag,lift:Number(keys.has('u'))-Number(keys.has('j'))};
+   if(g.crew.duty==='survey'&&(x||z||manual.lift)){g.crew.duty='standby';receipt('Manual override')}
+   const count=g.survey.scans,site=g.survey.site;advanceSurvey(g.survey,dt,g.crew.duty==='survey'?pilot(g.survey):manual);
+   if(g.survey.scans>count){
+     g.survey.lastSample={...site,id:count};
+     if(g.crew.duty==='survey')harvest();
+     if(g.crew.duty==='survey')g.crew.visits++;
+     receipt('Survey logged');
+   }
+   return
+ }
  if(g.mode==='navigation'){if(stepTrajectory(g.trajectory,dt*g.trajectory.warp,x/mag,-z/mag)==='entry')survey();return}
- g.bank=x/mag;const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));g.x=clamp(g.x+mx/mag*dt*speed,g.mode==='deck'?-2.4:-9,g.mode==='deck'?2.4:9);g.z=clamp(g.z+mz/mag*dt*speed,g.mode==='deck'?-6.6:-5,7);
- if(g.mode==='deck')return;g.impacts=g.impacts.filter(f=>(f.life-=dt)>0);fire-=dt;recharge=Math.max(0,recharge-dt);g.spirit=Math.max(0,g.spirit-dt);spiritFire-=dt;enemyFire-=dt;
+ g.bank=x/mag;const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+ g.x=clamp(g.x+mx/mag*dt*speed,g.mode==='deck'?-2.4:-9,g.mode==='deck'?2.4:9);
+ g.z=clamp(g.z+mz/mag*dt*speed,g.mode==='deck'?-6.6:-5,7);
+
+ if(g.mode==='deck')return;
+ g.impacts=g.impacts.filter(f=>(f.life-=dt)>0);fire-=dt;recharge=Math.max(0,recharge-dt);g.spirit=Math.max(0,g.spirit-dt);spiritFire-=dt;enemyFire-=dt;
  if(keys.has('fire')||keys.has(' '))shoot();
+
  for(const e of g.enemies){e.x+=Math.cos(clock+e.phase)*dt*1.6;e.z=e.base+Math.sin(clock*.5+e.phase)*.7}
- if(g.enemies.length&&enemyFire<=0){enemyFire=1.6;const e=g.enemies[Math.floor(clock)%g.enemies.length],d=Math.hypot(g.x-e.x,g.z-e.z)||1;g.shots.push({x:e.x,z:e.z,dx:(g.x-e.x)/d*7,dz:(g.z-e.z)/d*7,enemy:true})}
- if(g.spirit>0&&spiritFire<=0&&g.enemies.length){spiritFire=.8;const e=g.enemies[0],x=g.x+1.9,d=Math.hypot(e.x-x,e.z-g.z)||1;g.shots.push({x,z:g.z,dx:(e.x-x)/d*21,dz:(e.z-g.z)/d*21,enemy:false})}
- g.shots=g.shots.filter(b=>{b.x+=b.dx*dt;b.z+=b.dz*dt;if(b.enemy&&Math.hypot(b.x-g.x,b.z-g.z)<1){g.hp-=12;g.impacts.push({x:b.x,z:b.z,life:.25,duration:.25});return false}if(!b.enemy){const e=g.enemies.find(e=>e.hp>0&&Math.hypot(b.x-e.x,b.z-e.z)<1.24);if(e){e.hp--;const duration=e.hp===0?.58:.22;g.impacts.push({x:b.x,z:b.z,life:duration,duration});return false}}return Math.abs(b.x)<25&&b.z>-27&&b.z<18});
- const n=g.enemies.length;g.enemies=g.enemies.filter(e=>e.hp>0);if(n&&!g.enemies.length){
+ if(g.enemies.length&&enemyFire<=0){
+   enemyFire=1.6;const e=g.enemies[Math.floor(clock)%g.enemies.length],d=Math.hypot(g.x-e.x,g.z-e.z)||1;
+   audio.laser(true);
+   g.shots.push({x:e.x,z:e.z,dx:(g.x-e.x)/d*7,dz:(g.z-e.z)/d*7,enemy:true})
+ }
+ if(g.spirit>0&&spiritFire<=0&&g.enemies.length){
+   spiritFire=.8;const e=g.enemies[0],x=g.x+1.9,d=Math.hypot(e.x-x,e.z-g.z)||1;
+   audio.laser(false);
+   g.shots.push({x,z:g.z,dx:(e.x-x)/d*21,dz:(e.z-g.z)/d*21,enemy:false})
+ }
+
+ g.shots=g.shots.filter(b=>{
+   b.x+=b.dx*dt;b.z+=b.dz*dt;
+   if(b.enemy&&Math.hypot(b.x-g.x,b.z-g.z)<1){
+     g.hp-=12;
+     audio.impact(true);addCameraShake(0.35);
+     g.impacts.push({x:b.x,z:b.z,life:.25,duration:.25});return false
+   }
+   if(!b.enemy){
+     const e=g.enemies.find(e=>e.hp>0&&Math.hypot(b.x-e.x,b.z-e.z)<1.24);
+     if(e){
+       e.hp--;
+       const duration=e.hp===0?.58:.22;
+       audio.impact(e.hp===0);addCameraShake(e.hp===0?0.2:0.08);
+       g.impacts.push({x:b.x,z:b.z,life:duration,duration});return false
+     }
+   }
+   return Math.abs(b.x)<25&&b.z>-27&&b.z<18
+ });
+
+ const n=g.enemies.length;g.enemies=g.enemies.filter(e=>e.hp>0);
+ if(n&&!g.enemies.length){
   if(g.hp>0&&blockadeActive(ledger,sector)){
    if(g.blockadeLink){transact(()=>clearBlockade(ledger,sector,true));receipt('Recovered the Nine Lanterns');tell('Convoy recovered. Open The Choir Line on your bridge.')}
    else tell('Signal lost. Re-enter the Orison blockade and summon your spirit before the last ship falls.')
   }else tell('Orbit secured. Claim this world.')
- }if(g.hp<=0){g.hp=0;panel('Escape pod recovered','Your spirit guided the pod home. Previously claimed worlds remain in your fleet.',[['Return to hangar',hangar]])}}
-$('menu').onclick=()=>{if(g.hp<=0)hangar();else bridge()};
-onkeydown=e=>{if(districtOpen)return;const k=e.key.toLowerCase();if(k===' '||k.startsWith('arrow'))e.preventDefault();if(!e.repeat&&!overlay){if(k==='e'&&g.mode==='flight')summon();if(k==='f')interact();if(k==='escape')bridge()}keys.add(k)};onkeyup=e=>keys.delete(e.key.toLowerCase());document.onvisibilitychange=()=>{if(document.hidden&&!overlay&&!districtOpen)bridge()};
-const stick=$('stick');function aim(e){if(e.pointerId!==finger)return;const b=stick.getBoundingClientRect(),x=e.clientX-b.left-b.width/2,y=e.clientY-b.top-b.height/2,l=Math.max(32,Math.hypot(x,y));axis=[x/l,y/l];stick.firstElementChild.style.transform='translate('+axis[0]*30+'px,'+axis[1]*30+'px)'}stick.onpointerdown=e=>{if(finger!==null)return;finger=e.pointerId;stick.setPointerCapture(finger);aim(e)};stick.onpointermove=aim;stick.onlostpointercapture=()=>{finger=null;axis=[0,0];stick.firstElementChild.style.transform=''};
-hangar();let previous=performance.now(),hud='';function label(id,value){const el=$(id);if(el.textContent!==value)el.textContent=value}
-function frame(now){const dt=Math.min(.05,(now-previous)/1000);previous=now;update(dt);g.canLook=!overlay||g.mode==='hangar';if(!districtOpen){
-  drawJourney(g.mode==='journey'?g.journey:null,now,stationFor(ledger,sector));
-  if(g.mode==='journey')showTrajectory(null);
-  else if(g.mode==='navigation')showTrajectory(g.trajectory);
-  else{showTrajectory(null);render(g,clock)}
  }
- const nav=g.mode==='navigation'?orbitReadout(g.trajectory):null;
- const tracked=g.mode==='journey'&&g.journey.trackStation&&stationFor(ledger,sector);
- const h=overlay?'':g.mode==='journey'?((tracked?stationBearing(tracked,g.journey)+'\n':'')+(g.crew.duty==='helm'?'Astra · '+g.crew.flightOrder.stage+' → '+g.journey.target.name+'\n':'')+(g.journey.alt<5?(sector%4===2?'Cloud skimming':'Surface drive'):'Free flight')+' · '+(g.journey.alt<1000?Math.round(g.journey.alt)+' m':Math.round(g.journey.alt/1000).toLocaleString()+' km')+' altitude · '+Math.round(g.journey.v.length()).toLocaleString()+' m/s'):nav?('Orbit · '+Math.round(nav.altitude/1000)+' km　 '+(nav.speed/1000).toFixed(2)+' km/s　 ×'+g.trajectory.warp+'\nPeriapsis '+Math.round(nav.periapsis/1000)+' km  /  Apoapsis '+(Number.isFinite(nav.apoapsis)?Math.round(nav.apoapsis/1000)+' km':'escape')):g.mode==='survey'?(surveyStatus(g.survey)+(g.crew.duty==='survey'?' · Astra piloting':'')):g.mode==='deck'?'Forward helm · '+Math.max(0,Math.ceil(g.z+4))+' m':('Hull '+g.hp+'/'+ships[g.ship].hull+'　 Patrol '+g.enemies.length+'　 Spirit '+(recharge?Math.ceil(recharge)+'s':'ready'));if(h!==hud){hud=h;$('hud').textContent=h}label('location',g.world.name+' / '+ships[g.ship].name);label('help',overlay?'':g.mode==='journey'?'W/S · Drive　 A/D · Turn　 I/K · Pitch　 U/J · Lift　 F · Bearing':g.mode==='survey'?'W/S · Thrust　 A/D · Turn　 U/J · Climb / descend　 F · Orbit':g.mode==='navigation'?'W/S · Prograde / retrograde　 A/D · Radial burn　 F · Patrol':g.mode==='deck'?'WASD / arrows · Walk　 Drag · Look　 F · Helm':'WASD / arrows · Fly　 Space · Fire　 E · Spirit　 F · Claim');requestAnimationFrame(frame)}requestAnimationFrame(frame);
+ if(g.hp<=0){
+   g.hp=0;
+   audio.impact(true);
+   panel('Escape pod recovered','Your spirit guided the pod home. Previously claimed worlds remain in your fleet.',[['Return to hangar',hangar]])
+ }
+}
+
+$('menu').onclick=()=>{if(g.hp<=0)hangar();else bridge()};
+
+// Header Camera & AI buttons
+const viewToggle = $('view-toggle');
+if(viewToggle){
+  viewToggle.onclick=()=>{
+    const next = cameraMode === 'chase' ? 'cockpit' : 'chase';
+    setCameraMode(next);
+    viewToggle.textContent = 'CAM: ' + next.toUpperCase();
+    audio.uiClick('click');
+  };
+}
+const aiToggle = $('ai-toggle');
+if(aiToggle){
+  aiToggle.onclick=()=>{
+    const el=$('ai-telemetry');
+    if(el)el.hidden=!el.hidden;
+    audio.uiClick('click');
+  };
+}
+
+// Comms Display Subscriber
+let commsTimer = null;
+comms.subscribe(entry => {
+  const commsBox = $('astra-comms');
+  const senderEl = $('comms-sender');
+  const textEl = $('comms-text');
+  if (commsBox && senderEl && textEl) {
+    senderEl.textContent = entry.sender;
+    textEl.textContent = entry.text;
+    commsBox.hidden = false;
+    audio.uiClick('confirm');
+    clearTimeout(commsTimer);
+    commsTimer = setTimeout(() => { commsBox.hidden = true; }, 4500);
+  }
+});
+
+// Setup Neural telemetry visualizer bars
+const neuralBars = $('neural-bars');
+if(neuralBars && neuralBars.children.length === 0){
+  for(let i=0; i<32; i++){
+    const bar = document.createElement('div');
+    bar.className = 'neural-bar';
+    neuralBars.appendChild(bar);
+  }
+}
+
+onkeydown=e=>{
+  if(districtOpen)return;
+  const k=e.key.toLowerCase();
+  audio.resume();
+  if(k===' '||k.startsWith('arrow'))e.preventDefault();
+  if(!e.repeat&&!overlay){
+    if(k==='e'&&g.mode==='flight')summon();
+    if(k==='f')interact();
+    if(k==='v'){
+      const next = cameraMode === 'chase' ? 'cockpit' : 'chase';
+      setCameraMode(next);
+      if(viewToggle)viewToggle.textContent = 'CAM: ' + next.toUpperCase();
+      audio.uiClick('click');
+    }
+    if(k==='escape')bridge()
+  }
+  keys.add(k)
+};
+onkeyup=e=>keys.delete(e.key.toLowerCase());
+document.onvisibilitychange=()=>{if(document.hidden&&!overlay&&!districtOpen)bridge()};
+const stick=$('stick');
+function aim(e){
+  if(e.pointerId!==finger)return;
+  const b=stick.getBoundingClientRect(),x=e.clientX-b.left-b.width/2,y=e.clientY-b.top-b.height/2,l=Math.max(32,Math.hypot(x,y));
+  axis=[x/l,y/l];
+  stick.firstElementChild.style.transform='translate('+axis[0]*30+'px,'+axis[1]*30+'px)'
+}
+stick.onpointerdown=e=>{audio.resume();if(finger!==null)return;finger=e.pointerId;stick.setPointerCapture(finger);aim(e)};
+stick.onpointermove=aim;
+stick.onlostpointercapture=()=>{finger=null;axis=[0,0];stick.firstElementChild.style.transform=''};
+
+hangar();
+let previous=performance.now(),hud='';
+function label(id,value){const el=$(id);if(el&&el.textContent!==value)el.textContent=value}
+
+function updateCockpitHUD(){
+  const bracket = $('target-bracket');
+  if(!bracket)return;
+  if(g.mode==='flight' && g.enemies && g.enemies.length > 0 && !overlay){
+    const e = g.enemies[0];
+    const screenX = innerWidth * 0.5 + (e.x - g.x) * (innerWidth * 0.04);
+    const screenY = innerHeight * 0.42 + (e.z - g.z) * (innerHeight * 0.015);
+    bracket.hidden = false;
+    bracket.style.left = Math.max(40, Math.min(innerWidth-40, screenX)) + 'px';
+    bracket.style.top = Math.max(80, Math.min(innerHeight-80, screenY)) + 'px';
+    const dist = Math.hypot(e.x - g.x, e.z - g.z) * 45;
+    const distEl = bracket.querySelector('.target-dist');
+    if(distEl)distEl.textContent = Math.round(dist) + 'm';
+  } else {
+    bracket.hidden = true;
+  }
+
+  // Update AI Telemetry Panel
+  const telemetry = $('ai-telemetry');
+  if(telemetry && !telemetry.hidden){
+    const spd = g.mode==='journey' ? (g.journey?.v.length()||0) : g.mode==='survey' ? Math.hypot(g.survey?.vx||0, g.survey?.vz||0) : (keys.size?ships[g.ship].speed:0);
+    const alt = g.mode==='journey' ? (g.journey?.alt||0) : g.mode==='survey' ? (g.survey?.clearance||0) : 142000;
+    label('ai-stat-spd', Math.round(spd).toLocaleString() + ' m/s');
+    label('ai-stat-alt', alt < 1000 ? Math.round(alt)+'m' : Math.round(alt/1000)+'km');
+    label('ai-stat-hdg', Math.round(((g.yaw||0)*180/Math.PI + 360)%360) + '°');
+    label('ai-stat-tgt', g.enemies?.length ? 'HOSTILE x'+g.enemies.length : g.journey?.target?.name || 'CLEAR');
+
+    // Animate neural bars
+    if(neuralBars){
+      const bars = neuralBars.children;
+      for(let i=0; i<bars.length; i++){
+        const h = Math.abs(Math.sin(clock*3 + i*0.4)) * 20 + 2;
+        bars[i].style.height = h + 'px';
+      }
+    }
+  }
+}
+
+function frame(now){
+  const dt=Math.min(.05,(now-previous)/1000);previous=now;
+  update(dt);
+  g.canLook=!overlay||g.mode==='hangar';
+  if(!districtOpen){
+    drawJourney(g.mode==='journey'?g.journey:null,now,stationFor(ledger,sector));
+    if(g.mode==='journey')showTrajectory(null);
+    else if(g.mode==='navigation')showTrajectory(g.trajectory);
+    else{showTrajectory(null);render(g,clock)}
+  }
+  updateCockpitHUD();
+  const nav=g.mode==='navigation'?orbitReadout(g.trajectory):null;
+  const tracked=g.mode==='journey'&&g.journey.trackStation&&stationFor(ledger,sector);
+  const h=overlay?'':g.mode==='journey'?((tracked?stationBearing(tracked,g.journey)+'\n':'')+(g.crew.duty==='helm'?'Astra · '+g.crew.flightOrder.stage+' → '+g.journey.target.name+'\n':'')+(g.journey.alt<5?(sector%4===2?'Cloud skimming':'Surface drive'):'Free flight')+' · '+(g.journey.alt<1000?Math.round(g.journey.alt)+' m':Math.round(g.journey.alt/1000).toLocaleString()+' km')+' altitude · '+Math.round(g.journey.v.length()).toLocaleString()+' m/s'):nav?('Orbit · '+Math.round(nav.altitude/1000)+' km　 '+(nav.speed/1000).toFixed(2)+' km/s　 ×'+g.trajectory.warp+'\nPeriapsis '+Math.round(nav.periapsis/1000)+' km  /  Apoapsis '+(Number.isFinite(nav.apoapsis)?Math.round(nav.apoapsis/1000)+' km':'escape')):g.mode==='survey'?(surveyStatus(g.survey)+(g.crew.duty==='survey'?' · Astra piloting':'')):g.mode==='deck'?'Forward helm · '+Math.max(0,Math.ceil(g.z+4))+' m':('Hull '+g.hp+'/'+ships[g.ship].hull+'　 Patrol '+g.enemies.length+'　 Spirit '+(recharge?Math.ceil(recharge)+'s':'ready'));
+  if(h!==hud){hud=h;$('hud').textContent=h}
+  label('location',g.world.name+' / '+ships[g.ship].name);
+  label('help',overlay?'':g.mode==='journey'?'W/S · Drive　 A/D · Turn　 I/K · Pitch　 U/J · Lift　 F · Bearing　 V · Cam':g.mode==='survey'?'W/S · Thrust　 A/D · Turn　 U/J · Climb / descend　 F · Orbit　 V · Cam':g.mode==='navigation'?'W/S · Prograde / retrograde　 A/D · Radial burn　 F · Patrol':g.mode==='deck'?'WASD / arrows · Walk　 Drag · Look　 F · Helm':'WASD / arrows · Fly　 Space · Fire　 E · Spirit　 F · Claim　 V · Cam');
+  requestAnimationFrame(frame)
+}
+requestAnimationFrame(frame);
