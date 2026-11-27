@@ -1,5 +1,12 @@
 name: Deploy game to Pages
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['dist/**', 'release/**', 'test/**', '.github/workflows/pages.yml']
+concurrency:
+  group: ashen-reach-pages
+  cancel-in-progress: false
 permissions:
   contents: read
   pages: write
@@ -10,6 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+      - run: python3 release/build.py
+      - run: python3 release/smoke.py release-output/AshenReach-0.7.0.zip
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
