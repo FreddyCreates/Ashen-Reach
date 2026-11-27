@@ -558,6 +558,38 @@ hangar();
 let previous=performance.now(),hud='';
 function label(id,value){const el=$(id);if(el&&el.textContent!==value)el.textContent=value}
 
+let physicalCockpit=false;
+function updateFlightInstruments(){
+ const el=$('flight-instruments');if(!el)return;
+ const s=g.mode==='journey'&&!overlay&&!districtOpen?g.journey:null;
+ el.hidden=!s;
+ if(!s)return;
+ el.classList.toggle('cockpit-frame',cameraMode==='cockpit'&&!physicalCockpit);
+ const normal=s.p.clone().sub(s.body.center).normalize();
+ const port=s.harborApproach?harborFor(s.body,relief):null;
+ const bearing=(port?port.position:s.target.center).clone().sub(s.p);
+ const vertical=s.v.dot(normal),north=normal.clone().multiplyScalar(-normal.y);north.y+=1;
+ if(north.lengthSq()<1e-10)north.set(0,0,1);north.normalize();
+ const east=north.clone().cross(normal).normalize(),heading=Math.atan2(s.forward.dot(east),s.forward.dot(north))*180/Math.PI;
+ const format=n=>Math.round(n).toLocaleString('en-US');
+ label('flight-speed',format(s.v.length())+' m/s');
+ label('flight-alt',format(s.alt)+' m');
+ label('flight-vs',(vertical>=0?'+':'')+format(vertical)+' m/s');
+ label('flight-heading',String(Math.round((heading+360)%360)%360).padStart(3,'0')+'°');
+ label('flight-target',port?'HEARTH N-04':s.target.name.toUpperCase());
+ label('flight-distance',format(Math.max(0,bearing.length()-(port?0:s.target.r))/1000)+' km');
+ label('flight-drive',s.cruise?'CRUISE ASSIST':'NEWTONIAN');
+ label('flight-hull',Math.round(100*Math.max(0,g.hp)/ships[g.ship].hull)+'%');
+ const mark=$('flight-marker');
+ if(mark){
+ const z=bearing.dot(s.forward),up=s.right.clone().cross(s.forward).normalize();
+ mark.hidden=z<=0;
+ if(z>0){
+ mark.style.left=Math.max(8,Math.min(92,50+bearing.dot(s.right)*innerHeight*.83/z/innerWidth*100))+'%';
+ mark.style.top=Math.max(15,Math.min(78,50-bearing.dot(up)*.83/z*100))+'%';
+ }
+ }
+}
 function updateCockpitHUD(){
   const bracket = $('target-bracket');
   if(!bracket)return;
@@ -608,14 +640,18 @@ function frame(now){
   }
   updateCockpitHUD();
   const flight=g.mode==='journey'&&!overlay&&!districtOpen?g.journey:null;
+  physicalCockpit=false;
   if(flight&&cameraMode==='cockpit'){
    const port=flight.harborApproach?harborFor(flight.body,relief):null;
    const normal=flight.p.clone().sub(flight.body.center).normalize();
    const north=normal.clone().multiplyScalar(-normal.y);north.y+=1;
-   const east=north.clone().cross(normal).normalize();north.normalize();
+   if(north.lengthSq()<1e-10)north.set(0,0,1);north.normalize();
+   const east=north.clone().cross(normal).normalize();
    const heading=(Math.atan2(flight.forward.dot(east),flight.forward.dot(north))*180/Math.PI+360)%360;
-   renderCockpit(true,{hull:Math.max(0,g.hp)/ships[g.ship].hull*100,speed:flight.v.length(),drive:flight.cruise?'CRUISE':'NEWTONIAN',target:port?'HEARTH N-04':flight.target.name,range:port?flight.p.distanceTo(port.position):Math.max(0,flight.p.distanceTo(flight.target.center)-flight.target.r),alt:flight.alt,vertical:flight.v.dot(normal),approach:!!port,heading},now);
+   physicalCockpit=renderCockpit(true,{hull:Math.max(0,g.hp)/ships[g.ship].hull*100,speed:flight.v.length(),drive:flight.cruise?'CRUISE':'NEWTONIAN',target:port?'HEARTH N-04':flight.target.name,range:port?flight.p.distanceTo(port.position):Math.max(0,flight.p.distanceTo(flight.target.center)-flight.target.r),alt:flight.alt,vertical:flight.v.dot(normal),approach:!!port,heading},now);
   }else renderCockpit(false,null,now);
+  $('flight-instruments')?.classList.toggle('physical-cockpit',physicalCockpit);
+  updateFlightInstruments();
   const nav=g.mode==='navigation'?orbitReadout(g.trajectory):null;
   const tracked=g.mode==='journey'&&g.journey.trackStation&&stationFor(ledger,sector);
   const portStatus=g.mode==='journey'?harborStatus(harborFor(g.journey.body,relief),g.journey):null;

@@ -1,4 +1,39 @@
-# Ashen Reach
+<div align="center">
+
+# ASHEN REACH
+
+### A living science-fiction universe.
+
+![Ashen Reach fleet artwork](dist/art/hero-0.webp)
+
+**Fly beyond the horizon. Build a life among the stars.**
+
+[Play the game](https://freddycreates.github.io/Ashen-Reach/) · [Universe & game design](GAME-PLAN.md) · [Studio development](DEVELOPMENT.md)
+
+</div>
+
+## Your ship. Your crew. Your frontier.
+
+Explore four founding worlds, command Astra at the helm, recover the voices of the lost Nine Lanterns convoy, mine resources and establish a foothold in a growing civilization.
+
+<table><tr><td width="50%"><img src="dist/art/flight-0.webp" alt="Existing game flight artwork"><br><strong>Take the helm</strong><br>Planetary flight and orbital navigation.</td><td width="50%"><img src="dist/art/world-1.webp" alt="Existing planetary art"><br><strong>Discover the Reach</strong><br>Distinct worlds and expanding frontiers.</td></tr><tr><td><img src="dist/art/hero-1.webp" alt="Existing fleet artwork"><br><strong>Command your vessel</strong><br>Three hulls with individual roles.</td><td><img src="dist/art/relief-0.webp" alt="Existing terrain art"><br><strong>Explore and build</strong><br>Survey, extract and construct field stations.</td></tr></table>
+
+*Gallery: existing repository game assets, not captured gameplay or the new cinematic target renders.*
+
+## The next horizon
+
+Nacre's monumental coastal harbor defines the studio's visual direction: ivory ceramic and basalt architecture, orange industrial markings, warm dusk lighting, ocean cliffs, freight traffic and a clean cyan-and-amber cockpit. The connected harbor milestone will link physical docking, walkable markets, cargo and boarding. The cinematic reference images are not yet published in this repository; current rendering is still below their fidelity.
+
+See the [visual production specification](VISUAL-DIRECTION.md) for the scene and gameplay acceptance criteria.
+
+## Hearth Harbor and pilot interior
+
+Board a ship, open **Bridge → Hearth harbor**, plot Nacre and request the N-04 approach. Secure the landing gear within the validated speed and clearance envelope to access exchange and repair services. Press **V** during continuous flight to switch to the physical cockpit with live instruments when WebGL is available. The lower-detail HUD remains the fallback. Walkable harbor interiors and cinematic visual parity are not yet released.
+
+[Studio design archive](game-design/README.md)
+
+## Current build and technical documentation
+
 An offline-capable science-fiction RPG and living-world simulation in development. Pilot three hulls, fly from orbit to the surface, and call a spirit into battle. The [studio production bible](GAME-PLAN.md#studio-production-bible--expansion-mandate) sets the direction for connected ports, autonomous crews, civilization and fleet ownership.
 
 ## Play The Choir Line

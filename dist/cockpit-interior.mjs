@@ -68,11 +68,11 @@ function screen(s,title,rows){
  s.tex.needsUpdate=true;
 }
 export function renderCockpit(active,data,now){
- if(!active){if(rig)rig.canvas.hidden=true;return}
- if(unavailable)return;
- if(!rig){rig=create();if(!rig){unavailable=true;return}}
+ if(!active){if(rig)rig.canvas.hidden=true;return false}
+ if(unavailable)return false;
+ if(!rig){rig=create();if(!rig){unavailable=true;return false}}
  const r=rig;r.canvas.hidden=false;
- const w=innerWidth,h=innerHeight;if(!w||!h)return;
+ const w=innerWidth,h=innerHeight;if(!w||!h)return false;
  if(w!==r.width||h!==r.height){r.width=w;r.height=h;r.renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));r.renderer.setSize(w,h,false);r.camera.aspect=w/h;r.camera.updateProjectionMatrix();r.root.scale.x=Math.min(1,w/h/1.3)}
  if(now-r.last>120){
   r.last=now;const fmt=n=>Math.round(n).toLocaleString('en-US');
@@ -81,4 +81,5 @@ export function renderCockpit(active,data,now){
   screen(r.screens[2],'FLIGHT TELEMETRY',[['VERTICAL',fmt(data.vertical)+' M/S'],['MODE',data.approach?'N-04 APPROACH':'MANUAL'],['HEADING',fmt(data.heading)+' DEG']]);
  }
  if(now-r.drawn>25){r.drawn=now;r.renderer.render(r.scene,r.camera)}
+ return true;
 }

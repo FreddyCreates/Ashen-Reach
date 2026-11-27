@@ -181,7 +181,6 @@ export function drawJourney(s,now,station=null){
   const points=tile(b,f,u,v,size).map(q=>{
     const p=q.p.clone().sub(s.p),z=p.dot(s.forward);
     // Distance-based atmospheric scattering haze for realistic planetary approach
-    const atmoDepth=Math.max(0,1-(p.length()-b.r*0.01)/(b.r*0.4));
     const fogFactor=Math.min(.72,(1-Math.exp(-p.length()/24000))*Math.max(0,1-s.alt/85000)*.85);
     const col=q.c.map((val,ci)=>Math.round(val*(1-fogFactor)+theme.haze[ci]*fogFactor));
     return {x:w/2+p.dot(s.right)*focal/z,y:h/2-p.dot(up)*focal/z,z,c:col};
