@@ -158,7 +158,7 @@ export function drawJourney(s,now,station=null){
  if(!canvas&&!s)return;if(!canvas)initRenderer()
  canvas.hidden=!s;if(!s||now-last<40)return;last=now;
  const w=innerWidth,h=innerHeight;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
- const sky=Math.max(0,1-s.alt/85000);const background=[5+sky*59,10+sky*84,24+sky*91];
+ const sky=Math.max(0,1-s.alt/85000);const background=[5+sky*66,10+sky*96,24+sky*115];
  if(gl){gl.viewport(0,0,w,h);gl.clearColor(...background.map(x=>x/255),1);gl.clear(gl.COLOR_BUFFER_BIT)}
  else{ctx.fillStyle='rgb('+background.map(Math.floor)+')';ctx.fillRect(0,0,w,h)}
  if(!gl&&sky<.85){ctx.fillStyle='#b0b9c4';for(let i=0;i<115;i++)ctx.fillRect((i*7919)%w,(i*3571)%h,1.2,1.2)}
@@ -182,7 +182,7 @@ export function drawJourney(s,now,station=null){
     const p=q.p.clone().sub(s.p),z=p.dot(s.forward);
     // Distance-based atmospheric scattering haze for realistic planetary approach
     const atmoDepth=Math.max(0,1-(p.length()-b.r*0.01)/(b.r*0.4));
-    const fogFactor=Math.min(0.65,atmoDepth*0.75);
+    const fogFactor=Math.min(.72,(1-Math.exp(-p.length()/24000))*Math.max(0,1-s.alt/85000)*.85);
     const col=q.c.map((val,ci)=>Math.round(val*(1-fogFactor)+theme.haze[ci]*fogFactor));
     return {x:w/2+p.dot(s.right)*focal/z,y:h/2-p.dot(up)*focal/z,z,c:col};
   });
