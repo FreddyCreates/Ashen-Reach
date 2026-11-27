@@ -6,7 +6,7 @@ The player captains a small crew among four worlds that depend on one another fo
 
 ## What a player can do today
 
-The 0.6 baseline has three selectable hulls, walkable decks, a four-body continuous flight system, surface skimming and geographical mineral extraction. Cruise assist compresses travel time. Newtonian flight uses gravity and preserves momentum. The dedicated navigation plot shows predicted orbital extremes. In the surface survey, Astra can pilot a ship using a locally trained neural controller. The freeport district simulates moving freight carriers, sealed and medical consignments, customs inspections and refits. Patrol encounters support combat and spirit summons.
+The 0.7 baseline has three selectable hulls, walkable decks, a four-body continuous flight system, surface skimming and geographical mineral extraction. Cruise assist compresses travel time. Newtonian flight uses gravity and preserves momentum. The dedicated navigation plot shows predicted orbital extremes. In the surface survey, Astra can pilot a ship using a locally trained neural controller. The freeport district simulates moving freight carriers, sealed and medical consignments, customs inspections and refits. Patrol encounters support combat and spirit summons.
 
 Claims, mining, district accounts and navigator history use browser storage. Colony infrastructure follows a reproducible quarter-hour clock. The optional observatory publishes frontier checkpoints. Geographic docks, walkable planetary cities, planet-to-planet NPC freight and shared online ownership are production milestones. The following sections distinguish the opening chapter from the continuation designed for later releases.
 
@@ -31,6 +31,8 @@ These two outcomes carry into the design of the later acts below. Their wider so
 The chart can seed further worlds. A new inhabited system earns authored content when it has an import dependency, a recognizable approach, a resident with a continuing obligation, and a route whose failure changes a neighboring settlement.
 
 ## Campaign continuation · designed chapters
+
+Act II cargo-delivery slice is merged in PR #7: four ammonia, Veyra location check, mutually exclusive clinic/condenser outcome, persistent payout. Physical towing, docking and downstream station consequences remain planned.
 
 | Act | Jobs the captain can undertake | Decision and lasting consequence |
 |---|---|---|
@@ -77,3 +79,93 @@ The supplied agent-phone review gives an architectural direction for portable pr
 | Commercial mobile release | Pilot tutorial, readable touch controls, configurable sound and text, quality settings, content rights, save export and opt-in diagnostics. | Record sustained performance, memory pressure and thermal behavior on named iOS/Android devices; repeat a complete voyage after suspend, offline launch and OS interruption. Target 30 fps on the supported mobile tier. |
 
 Ship each step as a voyage a player can finish. A new hull, city, institution or agent integration should change the decisions available during that voyage and leave a result the player can revisit.
+
+
+## Studio production bible · expansion mandate
+
+**Product identity.** Ashen Reach is a premium science-fiction role-playing and living-world simulation. The player begins as a captain with one ship, builds relationships with people and spirits, earns a living, and may become an explorer, trader, soldier, industrialist, settlement governor or fleet commander. No profession requires combat or online connectivity for the opening campaign. Expansion must deepen existing systems rather than replace them with disconnected minigames.
+
+### Art direction and experience
+
+The Reach is industrial, monumental and inhabited: weathered ceramic hulls, oxidized metal, dark basalt, restrained amber lights, pale blue navigation marks, dense atmosphere and immense negative space. Each planet has a distinct silhouette, palette, weather, architecture, soundscape and material economy. Avoid neon clutter and generic cockpit dashboards. The player sees a ship, not a web dashboard.
+
+| Location | Visual anchor | Sound and interaction |
+|---|---|---|
+| Aurelia | Rust canyons, terraced mines, dust and monumental smelters | Wind, machinery, rock impacts; survey and extract |
+| Nacre | Turquoise ocean, white concrete breakwaters, wet docks | Surf, cranes, radio chatter; berth and trade |
+| Veyra | Layered cream clouds, lightning, suspended refinery cities | Pressure rumble, cable vibration; precision approach and rescue |
+| Orison | Black basalt, violet dusk, hospice lanterns and wreck fields | Bells, surf and fractured radio; witness and recover |
+| Frontier | Uncharted moons, ruins, wrecks and rare biospheres | Distinct environmental audio; discover and map |
+
+Build modular glTF/GLB assets with documented licenses, physically based materials, baked occlusion, instancing, LODs, compressed textures and collision proxies. Use a shared scale convention (meters), reference transforms and artist validation tools. Preserve existing Three.js assets while introducing quality tiers. WebGPU is an optional validated renderer, WebGL2 the primary compatibility target, and existing software view the degraded fallback. Native builds are a later evaluation, not an assumed rewrite. Establish an authored hero scene at each capital, real screenshots and reproducible camera routes; concept art is not evidence of rendering quality.
+
+### Game structure and progression
+
+- **Opening:** learn to walk, board, pilot, land, mine, trade, summon and recover Nine Lanterns. Complete a first voyage without reading external documentation.
+- **Midgame:** unlock licensed freight, rescue, salvage, ship repairs, exploration permits, apprentices, crew contracts and local reputation. Act II–IV choices change market availability, witnesses and public infrastructure.
+- **Endgame:** acquire multiple hulls, assign captains, establish lawful concessions, finance stations and manage fleets. Govern through resource obligations, diplomacy and defensible supply routes rather than arbitrary experience thresholds.
+- **Postgame:** keep the Reach running; authored expansions enter through physical gates and plausible local histories. No forced reset of ships, credits or relationships.
+
+Proposed 1.0 content budget (subject to vertical-slice cost measurement): four fully connected founding worlds, four major ports, eight meaningful secondary sites, six modular playable hulls, twenty named recurring characters, four main acts, thirty authored side contracts and six reusable economic contract families. Expansion target: twelve systems and thirty-six distinct worlds, with procedural terrain supporting authored points of interest; do not count empty generated planets as finished content.
+
+### Systems architecture
+
+| Subsystem | Production contract |
+|---|---|
+| World simulation | Versioned deterministic sector state, fixed simulation ticks, seeded randomness, spatial interest management, bounded catch-up, clock injection for tests. |
+| Flight and traversal | Canonical vessel pose, local origin rebasing, collision/landing, docking lease, walking navmesh, airlock transitions, recovery at safe berth. No teleport disguised as seamless travel. |
+| Economy | Integer quantities and credits, unified ledger, inventory ownership, escrow, reservations, idempotent settlement, bounded scarcity pricing, balanced sources and sinks, auditable event IDs. |
+| Combat | Ship and ground movement, energy/heat budgets, damage zones, shields, AI threat assessment, rescue and repair, configurable input and difficulty. Server validates outcomes online. |
+| People and factions | Stable identity, schedules, location, obligations, dialogue state, relationship history, jurisdiction and reputation. NPC behavior must affect the same economy and world as the player. |
+| Spirits | Named companions with consent, abilities, cooldowns, relationships and recoverable testimony. Keep effects mechanically explicit and accessible. |
+| Construction | Site authorization, recipes, material delivery, workforce, progress and maintenance. Completed structures are actual persistent scene entities. |
+| Missions | Versioned objective graphs, preconditions, failure/recovery paths, branching outcomes, durable checkpoints, replay protection and journal. |
+| Persistence | Schema migrations, transactional snapshot plus ordered events, checksums, backups, export/import and recovery. Browser storage remains offline baseline; IndexedDB migration precedes large saves. |
+| Online | Authenticated sessions, server-owned sector state, command validation, exclusive control leases, reconciliation, rate limits, abuse reporting, privacy and deletion controls. No client-trusted currency. |
+| Tools | Content schemas, world editor, mission validator, asset manifest, deterministic replay inspector, crash reports with opt-in diagnostics, performance captures and localization extraction. |
+
+### Embodied intelligence platform
+
+Astra is a character with a body, location, assigned duties, permissions and memory. Agents use the exact same validated commands as human players. Goal selection reads bounded observations; planners propose feasible tasks; deterministic execution validates resources and leases; receipts record outcomes. Manual captain control has priority. Agents cannot create credits, bypass collisions, read another player's private state or access real-world tools by default.
+
+Agent lifecycle: observe → prioritize → plan → reserve → execute → inspect → commit receipt → remember → recover or sleep. Every mission has a simulation-time budget, allowed actions, inventory allowance, cancellation token and maximum retry count. Local deterministic policies cover basic operations without a model; optional inference improves planning/dialogue only, with constrained outputs and safe fallback. Geometric MEDINA memory stores reference frame, theta, phi, rho, context ring and beat alongside stable entity IDs and evidence. Evaluate retrieval, continuity and recovery against ordinary event-indexed memory; no unsupported cognitive claims.
+
+External passport interoperability is a separately permissioned adapter, not a prerequisite to play. Never expose secrets, financial authority or external device control to an in-game NPC.
+
+### Delivery grid and agent work loop
+
+| Lane | First deliverable | Dependency | Definition of done |
+|---|---|---|---|
+| AR-01 Flight | Nacre approach, berth and return | existing deep flight | Recorded full voyage with safe reload |
+| AR-02 Scene | Nacre harbor hero environment | AR-01 coordinates | Authored collision, LOD, measured frame pacing |
+| AR-03 Economy | unified cargo and credit transactions | ledger migration | conservation, restart and duplicate-command tests |
+| AR-04 Agents | autonomous freight crew | AR-01, AR-03 | observed loading, flight, berth, delivery and receipts |
+| AR-05 Campaign | expand Borrowed Air physical rescue | AR-01, AR-03 | both branches, loss recovery, persistent consequences |
+| AR-06 Population | first walkable district and schedules | AR-02, AR-03 | named resident completes shift and reacts to shortage |
+| AR-07 Combat | pursuit, damage and rescue loop | flight/ledger | complete encounter and recovery with no duplicated loot |
+| AR-08 Content | validated mission and asset pipeline | schemas | deterministic content build and license manifest |
+| AR-09 Online | authoritative sector vertical slice | AR-03, AR-04 | concurrent clients, leases, reconnect and fault injection |
+| AR-10 Release | performance, accessibility, packaging | all shipped lanes | real device playtests, verified rollback and save migration |
+
+Each development agent claims one scoped task, reads canonical files, states acceptance criteria, implements on a branch, runs unit/integration/replay tests, captures a real interaction, opens a reviewed change, resolves regressions and hands off an evidence receipt. Dependencies must be satisfied before claiming a downstream feature complete. Keep the main branch playable; retain a known-good package and reversible migrations. Parallel work must own separate files or coordinate shared contracts. No indefinite unattended execution is implied by this document.
+
+### Release certification
+
+Proposed targets, not measured results: 60 fps desktop at 1080p on a named midrange GPU; 30 fps on selected mobile devices; p95 frame budgets 16.7/33.3 ms respectively; initial playable load under 10 seconds on a documented connection; no critical save loss; repeatable 72-hour agent/economy soak; first online test 32 concurrent players per sector, then increase only after measured capacity. Accessibility includes rebindable controls, subtitles, reduced motion, readable scalable text, contrast, non-color-only cues and controller/touch verification.
+
+Release gates: unit invariants, deterministic integration tests, full voyage browser replay, screenshot review, device performance, license audit, security review, migration from previous saves, clean installation, package integrity, rollback rehearsal, and player acceptance. A passing CI check is necessary but does not substitute for playtesting. Track every feature as DESIGN / PARTIAL / IMPLEMENTED / VERIFIED / RELEASED with commit, test command, environment and evidence. Never call an unverified feature production-ready.
+
+### Commercial and operating strategy
+
+Ship an offline-capable premium game first; optional online sectors and substantive expansions follow real demand and demonstrated hosting economics. Avoid pay-to-win, speculative token economies and dependency on hosted inference for essential play. Final pricing, platforms, headcount, budget and launch date require owner approval and measured production velocity. Track cost per authored location, content throughput, crash-free sessions, first-voyage completion, retention, support burden and online cost per active player. Review the roadmap after each verified vertical slice.
+
+### Milestone sequence
+
+0.8 Connected Harbor: one beautiful physical port and complete voyage.
+0.9 Living Reach: unified economy, visible carriers, persistent crew and Act II rescue.
+0.10 Inhabited Worlds: all four founding ports, residents, traversal and ground encounters.
+0.11 Coalition: complete campaign, fleet command and construction.
+0.12 Persistent Sectors: optional authoritative multiplayer and recovery.
+1.0: content-complete, optimized, accessible, certified and commercially packaged. Milestone numbers are proposals, not dates or release claims.
+
+The standard is a finished interaction, not a feature name. Every new system must improve the same playable universe.
