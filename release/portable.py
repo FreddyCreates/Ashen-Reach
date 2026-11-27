@@ -14,7 +14,7 @@ ADAPT = {
     "freeroam.mjs": [("new URL('./art/world-'+s.worldId%4+'.webp',import.meta.url).href", "ashenAsset('./art/world-'+s.worldId%4+'.webp')"), ("new URL('./art/'+name+'.webp',import.meta.url)", "ashenAsset('./art/'+name+'.webp')")],
     "mesh-light.mjs": [("fetch('./art/'+key+'.ao')", "fetch(ashenAsset('./art/'+key+'.ao'))")],
     "software-view.mjs": [("new URL('./art/'+name+'.webp',import.meta.url)", "ashenAsset('./art/'+name+'.webp')")],
-    "space-view.mjs": [("assets.load('./art/' + name + '.webp')", "assets.load(ashenAsset('./art/'+name+'.webp'))")],
+    "space-view.mjs": [("assets.load('./art/'+name+'.webp')", "assets.load(ashenAsset('./art/'+name+'.webp'))")],
     "orbital-flight.mjs": [("im.src='./art/disc-'+family+'.webp'", "im.src=ashenAsset('./art/disc-'+family+'.webp')")],
 }
 

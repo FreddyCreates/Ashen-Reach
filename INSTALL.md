@@ -33,3 +33,5 @@ Board a ship and open Bridge → Free flight, or walk to the helm. Hold the stic
 ## First session in 0.7
 
 After boarding, open **Bridge → The Choir Line** to start the convoy story. For an assisted flight, use **Crew station → Command a landing**. Astra records completed approaches in the Landing atlas. On Aurelia, collect four ferrite below 30 metres. At a clearance of five metres or less, open **Bridge → Field station** to build a service station, or keep the ore for the Nacre repeater. Construction and the repeater each consume four ferrite.
+
+To reach the first geographic freeport, open **Bridge → Planetary port → Approach Morrow berth** while at Aurelia. Hold the movement stick forward. Settle below 12 metres and 35 m/s inside the 90 metre berth envelope, then use **Port → Dock at Morrow Works**.

@@ -18,24 +18,14 @@ function groundColor(id,x,z,h,slope,near){
  const p=surveyProfile(id),pal=palette(id);
  const water=p.sea&&h<1;
  const band=.5+.5*Math.sin(h*(p.gas?.041:.18)+x*.00075);
- // Multi-biome micro-color variations: moss, sand ridges, rock striations, polar frost
- const strata=Math.sin(h*0.08+z*0.0012)*0.14;
- const latGradient=Math.abs(z)/((p.radius||5e6)*0.001);
- const isCold=latGradient>0.7||h>1800;
  const factor=water?.36:p.gas?clamp(.13+.56*band+.20*Math.sin(z*.0025),0,1):
- clamp(.16+(p.sea?Math.max(0,1-Math.abs(h-4)/13)*.64:.29*band)+Math.min(.29,slope*.23)+strata+(near?.11*random(Math.floor(x/6),Math.floor(z/6),id):0),0,1);
+ clamp(.16+(p.sea?Math.max(0,1-Math.abs(h-4)/13)*.64:.29*band)+Math.min(.29,slope*.23)+(near?.11*random(Math.floor(x/6),Math.floor(z/6),id):0),0,1);
  const base=water?pal.water:pal.rock, light=water?pal.dark:pal.light;
- let col=base.map((c,i)=>lerp(c,light[i],factor));
- if(isCold&&!water&&!p.gas){
-  const frost=clamp((latGradient-0.7)*2.5+Math.max(0,(h-1800)/600),0,0.85);
-  col=col.map((c,i)=>lerp(c,i===0?235:i===1?245:255,frost));
- }
- return col
+ return base.map((c,i)=>lerp(c,light[i],factor))
 }
 // Nested detail levels share one snapped origin and use coarse edge interpolation
 // where a finer boundary meets its neighbour. Geometry changes only on grid crossings.
-// Extended LOD horizons to give the planet a vast, expansive sense of planetary scale
-const levels=[{step:12,extent:192,cut:0},{step:48,extent:768,cut:192},{step:192,extent:3072,cut:768},{step:768,extent:12288,cut:3072}];
+const levels=[{step:12,extent:192,cut:0},{step:48,extent:768,cut:192},{step:192,extent:3072,cut:768}];
 function buildLandscape(s,cx,cz){
  const vals=[],cols=[],indices=[],colors=[],profile=surveyProfile(s.id);
  const sum=(x,z)=>surveyHeight(s.id,cx+x,cz+z);
