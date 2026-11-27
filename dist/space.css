@@ -269,3 +269,5 @@ body:has(.navigation-display:not([hidden])) #view{visibility:hidden}
 .cockpit-frame .flight-console{border:8px solid #252e35;border-top-color:#806b4e;box-shadow:0 12px 40px #000b}
 @media(max-width:650px){.flight-tape{top:37%;padding:6px;min-width:64px}.speed-tape{left:3%}.altitude-tape{right:3%}.flight-tape b{font-size:12px}.flight-console{bottom:28%;max-width:92%;width:max-content}.flight-console>div{padding:6px}.flight-console small{font-size:8px}.flight-console b{font-size:11px}.flight-compass{top:18%}}
 @media(prefers-reduced-motion:reduce){.pulse-ring,.astra-comms{animation:none}.neural-bar{transition:none}}
+
+.physical-cockpit .flight-console{display:none}

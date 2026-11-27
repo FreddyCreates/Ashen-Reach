@@ -26,6 +26,12 @@ Nacre's monumental coastal harbor defines the studio's visual direction: ivory c
 
 See the [visual production specification](VISUAL-DIRECTION.md) for the scene and gameplay acceptance criteria.
 
+## Hearth Harbor and pilot interior
+
+Board a ship, open **Bridge → Hearth harbor**, plot Nacre and request the N-04 approach. Secure the landing gear within the validated speed and clearance envelope to access exchange and repair services. Press **V** during continuous flight to switch to the physical cockpit with live instruments when WebGL is available. The lower-detail HUD remains the fallback. Walkable harbor interiors and cinematic visual parity are not yet released.
+
+[Studio design archive](game-design/README.md)
+
 ## Current build and technical documentation
 
 An offline-capable science-fiction RPG and living-world simulation in development. Pilot three hulls, fly from orbit to the surface, and call a spirit into battle. The [studio production bible](GAME-PLAN.md#studio-production-bible--expansion-mandate) sets the direction for connected ports, autonomous crews, civilization and fleet ownership.
