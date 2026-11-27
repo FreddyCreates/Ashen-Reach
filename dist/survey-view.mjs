@@ -38,7 +38,7 @@ function groundColor(id,x,z,h,slope,near){
 const levels=[{step:12,extent:192,cut:0},{step:48,extent:768,cut:192},{step:192,extent:3072,cut:768},{step:768,extent:12288,cut:3072}];
 function buildLandscape(s,cx,cz){
  const vals=[],cols=[],indices=[],colors=[],profile=surveyProfile(s.id);
- const sum=(x,z)=>surveyHeight(s.id,cx+x,cz+z);
+ const sum=(x,z)=>surveyHeight(s.id,cx+x,cz+z,s.frame);
  for(let level=0;level<levels.length;level++){
  const {step,extent,cut}=levels[level],base=vals.length/3,n=2*extent/step+1,ys=[];
  for(let row=0;row<n;row++)for(let col=0;col<n;col++){
@@ -67,7 +67,7 @@ function buildLandscape(s,cx,cz){
  if(!profile.gas){
  for(let z=cz-240;z<=cz+240;z+=12)for(let x=cx-240;x<=cx+240;x+=12){
   const r=random(x,z,s.id);if(r<.65)continue;
-  const xx=x+(r-.5)*10,zz=z+(random(z,x,s.id+1)-.5)*10,y=surveyHeight(s.id,xx,zz);
+  const xx=x+(r-.5)*10,zz=z+(random(z,x,s.id+1)-.5)*10,y=surveyHeight(s.id,xx,zz,s.frame);
   if(profile.sea&&y<1.3)continue;
   const size=.45+Math.pow(random(x,z,s.id+2),4)*5.9;
   debris.push({x:xx,y:y+.12*size,z:zz,size,angle:r*6.28})
@@ -81,9 +81,9 @@ let patch=null;
 function nearField(s){
  if(s.clearance>38||surveyProfile(s.id).gas)return null;
  const cx=Math.round(s.x/12)*12,cz=Math.round(s.z/12)*12;
- if(patch?.cx===cx&&patch?.cz===cz&&patch?.id===s.id)return patch;
+ if(patch?.cx===cx&&patch?.cz===cz&&patch?.id===s.id&&patch.frame===s.frame)return patch;
  const p=surveyProfile(s.id),n=49,v=[],c=[],rgb=[],idx=[];
- const grade=(x,z)=>surveyHeight(s.id,x,z);
+ const grade=(x,z)=>surveyHeight(s.id,x,z,s.frame);
  for(let j=0;j<n;j++)for(let i=0;i<n;i++){
   const x=cx-patchRadius+1.5*i,z=cz-patchRadius+1.5*j;
   let y=grade(x,z);
@@ -100,13 +100,13 @@ function nearField(s){
   if(i+1<n&&j+1<n){const k=j*n+i;idx.push(k,k+n,k+1,k+1,k+n,k+n+1)}
  }
  const geom=new T.BufferGeometry();geom.setAttribute('position',new T.Float32BufferAttribute(v,3));geom.setAttribute('color',new T.Float32BufferAttribute(c,3));geom.setIndex(idx);
- patch?.geom.dispose();patch={id:s.id,cx,cz,geom,colors:rgb};return patch
+ patch?.geom.dispose();patch={id:s.id,frame:s.frame,cx,cz,geom,colors:rgb};return patch
 }
 let active=null;
 function landscape(s){
  const cx=Math.round(s.x/192)*192,cz=Math.round(s.z/192)*192;
- if(!active||active.id!==s.id||active.cx!==cx||active.cz!==cz){
-  const previous=active;active={id:s.id,cx,cz,...buildLandscape(s,cx,cz)};previous?.geom.dispose()
+ if(!active||active.id!==s.id||active.frame!==s.frame||active.cx!==cx||active.cz!==cz){
+  const previous=active;active={id:s.id,frame:s.frame,cx,cz,...buildLandscape(s,cx,cz)};previous?.geom.dispose()
  }
  return active
 }
@@ -155,7 +155,7 @@ function renderGL(s,gl,l){
  if(p.gas)scene.fog.density=.00065+clamp((32-s.clearance)/120,0,1)*.014;
  camera.aspect=gl.domElement.clientWidth/gl.domElement.clientHeight;camera.updateProjectionMatrix();
  camera.position.set(s.x,s.y,s.z);camera.rotation.order='YXZ';camera.rotation.set(s.pitch,-s.yaw,s.bank);
- sky.position.copy(camera.position);beacon.position.set(s.site.x,terrainContact(s.id,s.site.x,s.site.z)+38,s.site.z);ring.rotation.y=-s.yaw;
+ sky.position.copy(camera.position);beacon.position.set(s.site.x,terrainContact(s.id,s.site.x,s.site.z,s.frame)+38,s.site.z);ring.rotation.y=-s.yaw;
  gl.render(scene,camera)
 }
 const css=(rgb)=>'rgb('+rgb.map(x=>Math.min(255,Math.max(0,Math.round(x)))).join(',')+')';
@@ -200,7 +200,7 @@ function drawSoftware(s,b,l){
  const size=d.size,A=project(d.x-size,d.y,d.z),B=project(d.x+size,d.y,d.z),C=project(d.x,d.y+size*.8,d.z),D=project(d.x,d.y,d.z+size*.8);enqueue([A,C,D],rock);enqueue([D,C,B],dark)}
  queue.sort((a,b)=>b.depth-a.depth);
  c.lineWidth=.7;c.lineJoin='round';for(const {pix,col} of queue){c.fillStyle=c.strokeStyle=col;c.beginPath();pix.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.closePath();c.fill();c.stroke()}
- const mark=project(s.site.x,terrainContact(s.id,s.site.x,s.site.z)+38,s.site.z);
+ const mark=project(s.site.x,terrainContact(s.id,s.site.x,s.site.z,s.frame)+38,s.site.z);
  if(mark[2]>2){const x=w/2+mark[0]*focal/mark[2],y=h/2-mark[1]*focal/mark[2],r=clamp(10*focal/mark[2],3,55);c.lineWidth=2;c.strokeStyle='#b6f2d8';c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.stroke();c.beginPath();c.moveTo(x,y+r);c.lineTo(x,y+r*2.3);c.stroke()}
  // A light flight-path reticle leaves the landscape unobstructed.
  c.strokeStyle='rgba(202,247,226,.78)';c.lineWidth=1;c.beginPath();c.moveTo(w*.5-19,h*.5);c.lineTo(w*.5-6,h*.5);c.lineTo(w*.5,h*.5+3);c.lineTo(w*.5+6,h*.5);c.lineTo(w*.5+19,h*.5);c.stroke()
