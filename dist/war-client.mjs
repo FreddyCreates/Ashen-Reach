@@ -27,10 +27,10 @@ export class WarClient{
   if(this.busy||now<this.next)return;this.next=now+125;this.busy=true;
   const p=this.snapshot.self;
   let cmd=this.pending;this.pending=null;
-  if(!cmd&&p.hp>0&&(input.drive||input.turn))cmd={type:'input',drive:input.drive,turn:input.turn};
   if(!cmd&&p.hp>0&&input.fire&&now>=(this.fireAt||0)){cmd={type:'fire'};this.fireAt=now+500}
+  if(!cmd&&p.hp>0&&(input.drive||input.turn))cmd={type:'input',drive:input.drive,turn:input.turn};
   if(cmd?.type==='fire')this.fireAt=now+500;
-  (cmd?this.request('command','POST',{...cmd,seq:p.seq+1}):this.request('state')).then(r=>{this.failure=false;if(cmd&&cmd.type!=='input')this.notice=r.event||'Confirmed';}).catch(e=>{this.notice=e.message;this.failure=true}).finally(()=>{this.busy=false});
+  (cmd?this.request('command','POST',{...cmd,seq:p.seq+1}):this.request('state')).then(r=>{this.failure=false;if(cmd&&cmd.type!=='input')this.notice=r.event||'Confirmed';}).catch(e=>{this.notice=e.message;this.failure=!this.snapshot||!['Weapon cooling','Recovery not ready','Territory contested','Outside control point','Loot unavailable','Player unavailable','Command rate limited'].includes(e.message)}).finally(()=>{this.busy=false});
  }
  close(){this.active=false;this.pending=null}
 }

@@ -34,7 +34,7 @@ export async function createWarService({dir,clock=Date.now}={}){
     });return true;
    }
    const token=/^Bearer ([a-f0-9]{64})$/.exec(req.headers.authorization||'')?.[1],id=token&&state.sessions[hash(token)];
-   if(!id){reply(res,401,{error:'Invalid session'});return true}
+   if(!id||!Object.hasOwn(state.universe.players,id)){reply(res,401,{error:'Invalid session'});return true}
    if(req.method==='GET'&&url.pathname==='/api/war/state'){presence.set(id,clock());reply(res,200,snapshot(id));return true}
    if(req.method==='POST'&&url.pathname==='/api/war/command'){
     const data=await body(req);
