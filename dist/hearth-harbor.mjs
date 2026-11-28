@@ -84,8 +84,10 @@ export function restoreHarbor(s,p,record,hull){
  if(f.lengthSq()<.5||r.lengthSq()<.5||Math.abs(f.clone().normalize().dot(r.clone().normalize()))>.15)return false;
  s.p.copy(pose.p);s.v.set(0,0,0);s.forward.copy(f.normalize());s.right.copy(r.normalize());s.alt=s.p.distanceTo(s.body.center)-s.body.r;return true;
 }
-export function harborMesh(p){
- if(meshes.has(p))return meshes.get(p);
+export function harborMesh(p,building=null){
+ if(!meshes.has(p))meshes.set(p,new Map());
+ const variants=meshes.get(p);
+ if(variants.has(building))return variants.get(building);
  const faces=[],point=(x,y,z)=>p.position.clone().addScaledVector(p.right,x).addScaledVector(p.up,y).addScaledVector(p.forward,z);
  const quad=(a,b,c,d,color)=>{for(const t of [[a,b,c],[a,c,d]])faces.push(t.map(q=>({p:q,c:color})))};
  const box=(x,y,z,w,h,d,col)=>{
@@ -107,5 +109,12 @@ export function harborMesh(p){
   for(const z of [55,67])quad(point(57*Math.cos(a),8+57*Math.sin(a),z),point(66*Math.cos(a),8+66*Math.sin(a),z),point(66*Math.cos(b),8+66*Math.sin(b),z),point(57*Math.cos(b),8+57*Math.sin(b),z),ivory);
   quad(point(57*Math.cos(a),8+57*Math.sin(a),55),point(57*Math.cos(b),8+57*Math.sin(b),55),point(57*Math.cos(b),8+57*Math.sin(b),67),point(57*Math.cos(a),8+57*Math.sin(a),67),amber)}
  for(let i=0;i<12;i++)box(-44+i*8,0,78,6,7,9,i%3?basalt:ivory);
- meshes.set(p,faces);return faces;
+ if(building==='depot'){
+  box(0,0,-67,34,11,18,ivory);
+  for(const x of [-11,0,11])box(x,11,-67,7,4,13,blue);
+ }else if(building==='mast'){
+  box(0,0,-67,14,5,14,basalt);box(0,5,-67,2,41,2,ivory);
+  for(let i=0;i<4;i++)box(0,24+i*6,-67,22-i*4,1.2,2,amber);
+ }
+ variants.set(building,faces);return faces;
 }

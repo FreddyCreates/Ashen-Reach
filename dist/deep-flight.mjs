@@ -182,7 +182,7 @@ function drawCivilianTraffic(s,up,focal,w,h,tri){
  showContactMarkers(contacts,true);
 }
 
-export function drawJourney(s,now,station=null){
+export function drawJourney(s,now,station=null,building=null){
  if(!s){showContactMarkers([],false);if(canvas)canvas.hidden=true;return;}if(!canvas)initRenderer()
  canvas.hidden=false;if(now-last<40)return;last=now;
  const w=innerWidth,h=innerHeight;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
@@ -225,7 +225,7 @@ export function drawJourney(s,now,station=null){
  }
  const port=harborFor(s.body,relief);
  if(port&&port.position.distanceTo(s.p)<28000){
-  for(const face of harborMesh(port)){
+  for(const face of harborMesh(port,building)){
    const vertices=face.map(q=>{const p=q.p.clone().sub(s.p),z=p.dot(s.forward);return {x:w/2+p.dot(s.right)*focal/z,y:h/2-p.dot(up)*focal/z,z,c:q.c}});
    if(vertices.every(q=>q.z>.15))tri.push([...vertices,vertices.reduce((sum,q)=>sum+q.z,0)]);
   }

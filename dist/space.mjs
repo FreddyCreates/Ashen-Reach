@@ -15,6 +15,7 @@ import {toJourney} from './planet-geography.mjs';
 import {newJourney,travel,drawJourney,relief} from './deep-flight.mjs';
 import {newLedger,extract,capacity,quote,resources,sell,upgrade} from './mining.mjs';
 import {activeMarketManifest,marketInventory,createMarketManifest,settleMarketManifest,cancelMarketManifest} from './market-manifest.mjs';
+import {commission, commissionedBuilding, commissionDelivery} from './hearth-commission.mjs';
 import {loadCrew,recordCrew,pilot} from './crew.mjs';
 import {createSurvey,advanceSurvey,surveyStatus} from './survey.mjs';
 import {createTrajectory,stepTrajectory,orbitReadout,showTrajectory} from './orbital-flight.mjs';
@@ -71,6 +72,8 @@ function hangar(){
  button('Board '+ship.name,()=>{
    audio.resume();audio.warpJump();
    save.ship=g.ship;persist();g.hp=ship.hull;deck();
+   if (ledger.campaign.stage === 'signal') campaignLog();
+   else if (commission(ledger) && !commissionedBuilding(ledger)) projectBrief();
  },row);$('choices').append(row)
 }
 function unpause(){document.querySelector('.chart-search')?.remove();stop();overlay=false;$('panel').hidden=true;$('controls').hidden=false;actions()}
@@ -172,6 +175,13 @@ function borrowedAir(message=''){
  panel(chapter.title,[message,chapter.body].filter(Boolean).join(' '),[...options,['The Choir Line',campaignLog],['Bridge',bridge]]);
  $('panel').classList.add('campaign-brief');$('panel').querySelector('small').textContent='BORROWED AIR / ACT II';
 }
+function projectBrief(){
+ const job=commission(ledger);
+ if(!job)return campaignLog();
+ const objective='Gather '+job.units+' '+job.cargo+' on '+job.place+' and land at Hearth N-04. Hold: '+ledger.ore[job.resource]+'. Payment: '+job.reward+' cr.';
+ const options=[['Plot '+job.place,()=>inspect(job.source)],['Approach Hearth',()=>hearth()],['Bridge',bridge]];
+ panel(job.name,commissionedBuilding(ledger)?'Commission complete at Hearth Exchange.':objective,options);
+}
 function campaignLog(){
  const chapter=episode(ledger),options=[];
  if(chapter.stage==='signal')options.push(['Trace the convoy signal',()=>{
@@ -187,6 +197,7 @@ function campaignLog(){
   options.push([label,()=>{transact(()=>broadcast(ledger,ally));receipt('Entrusted the beacon to '+ally);campaignLog()}])
  }
  if(chapter.stage==='complete')options.push(['Continue · Borrowed Air',()=>borrowedAir()]);
+ if(commission(ledger))options.unshift([commission(ledger).name,projectBrief]);
  panel(chapter.title,chapter.body,[...options,['Bridge',bridge]]);
  const briefing=$('panel');briefing.classList.add('campaign-brief');
  briefing.querySelector('small').textContent='THE CHOIR LINE  /  SHIP LOG';
@@ -333,6 +344,10 @@ function hearth(message=''){
   if(status?.ready){
    options.push(['Secure landing gear',()=>{let docked=false;transact(()=>{docked=dockHarbor(s,p,ledger,g.ship);return 'Berth secured'});if(docked){receipt('Docked at Hearth Exchange N-04');hearth('Landing gear secured.')}}]);
    if(hearthDocked()){
+    const job=commission(ledger),building=commissionedBuilding(ledger);
+    if(job&&!building)options.push(['Build '+job.name+' · '+job.units+' '+job.cargo,()=>hearth(transact(()=>commissionDelivery(ledger,hearthDocked())))]);
+    if(building==='depot')options.push(['Depot service · restore hull',()=>{g.hp=ships[g.ship].hull;hearth('Depot crew restored your hull.')}]);
+    if(building==='mast')options.push(['Listen at mast · recall spirit',()=>{recharge=0;hearth('Your spirit answered. Summon ready.')}]);
     options.push(['Visit weapons & equipment store',()=>armory()],['Enter mineral exchange',()=>exchange()],['Repair hull · 15 cr',()=>hearth(transact(()=>{if(g.hp>=ships[g.ship].hull)return 'Hull fully repaired.';if(ledger.credits<15)return 'Insufficient credits.';ledger.credits-=15;g.hp=ships[g.ship].hull;return 'Hull restored.'}))],['Depart N-04',()=>{transact(()=>{delete ledger.harbor;return 'Berth released'});s.harborApproach=false;s.aim=false;unpause();tell('Hold Climb to clear the pad.')}]);
    }
   }
@@ -752,7 +767,7 @@ function frame(now){
   update(dt);
   g.canLook=!overlay||g.mode==='hangar';
   if(!districtOpen){
-    drawJourney(g.mode==='journey'?g.journey:null,now,stationFor(ledger,sector));
+    drawJourney(g.mode==='journey'?g.journey:null,now,stationFor(ledger,sector),commissionedBuilding(ledger));
     drawSurface(g.mode==='surface'?g.expedition:null,g.ship);
     if(g.mode==='surface')showTrajectory(null);
     else if(g.mode==='journey')showTrajectory(null);
