@@ -26,7 +26,7 @@ export function stepExpedition(s,input,dt,ledger){
  const move=clamp(input.drive||0,-1,1)*dt*6;
  const x=s.x+Math.sin(s.yaw)*move,z=s.z-Math.cos(s.yaw)*move;
  const height=localHeight(s.frame,x,z),prev=localHeight(s.frame,s.x,s.z);
- if(Math.hypot(x,z)<=250&&(s.frame.body.id%4===0||height>1)&&Math.abs(height-prev)<Math.max(.35,Math.abs(move)*.85)){s.x=x;s.z=z}
+ if(Math.hypot(x,z)<=12000&&(s.frame.body.id%4===0||height>1)&&Math.abs(height-prev)<Math.max(.35,Math.abs(move)*.85)){s.x=x;s.z=z}
  for(const target of s.sites)if(target.kind==='drone'&&target.hp>0&&dist(s,target)<13)s.hp=Math.max(0,s.hp-dt*(9-armorAbsorb(ledger)));
 }
 export function fireGround(s,ledger){
