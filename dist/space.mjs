@@ -1,3 +1,5 @@
+import {WarClient} from './war-client.mjs';
+import {FACTIONS,rallyFor} from './warfront-geography.mjs';
 import {catalog,restoreArmory,purchase,equip,shipWeapon,groundWeapon,armorAbsorb} from './armory.mjs';
 import {createExpedition,stepExpedition,fireGround,interactGround,settleExpedition} from './surface-expedition.mjs';
 import {drawSurface} from './surface-expedition-view.mjs';
@@ -336,12 +338,38 @@ function boardSurface(){
  const msg=s.hp<=0?'Emergency recovery. Expedition reward forfeited.':transact(()=>settleExpedition(s,ledger));
  g.expedition=null;g.mode='journey';unpause();tell(msg);
 }
+let war=null,warJoining=false;
+function warfront(message=''){
+ const j=g.mode==='journey'?g.journey:null,p=j&&rallyFor(j.body),status=harborStatus(p,j);
+ const opts=[];
+ if(!j)opts.push(['Return to flight',()=>{launch();warfront()}]);
+ else if(!p)opts.push(['Plot Aurelia via flight computer',selectDestination]);
+ else{
+  opts.push(['Request Relay Crown approach',()=>{takeHelm();aiHarness.setAutopilot(null);j.warRally=true;requestApproach(j,p);unpause();tell('Relay Crown approach engaged.') }]);
+  if(status?.ready)for(const f of FACTIONS)opts.push(['Enlist / resume · '+f,()=>joinWar(f)]);
+ }
+ panel('Aurelia · Relay Crown',message+' Land at A-01 to enter the networked faction war. The online inventory is server-owned and separate from offline saves. '+(status?'Range '+Math.round(status.range)+' m · Clearance '+Math.round(status.height)+' m':'Travel to Aurelia first.'),[...opts,['Bridge',bridge]]);
+}
+async function joinWar(faction){
+ if(warJoining)return;warJoining=true;
+ const j=g.journey,p=j&&rallyFor(j.body);
+ if(!harborStatus(p,j)?.ready){warJoining=false;return warfront('Landing required.')}
+ const client=new WarClient();
+ panel('Connecting to Relay Crown','Authenticating your faction session…',[]);
+ try{await client.connect(faction);war=client;g.expedition=client.makeSurface();j.v.set(0,0,0);j.harborApproach=false;j.warRally=false;g.mode='surface';unpause();tell('Faction network connected. Server controls your equipment and combat.')}
+ catch(e){warfront('Network unavailable: '+e.message+'. Start npm run multiplayer on the game host.')}
+ finally{warJoining=false}
+}
+function exitWar(){war?.close();war=null;g.expedition=null;g.mode='journey';unpause();tell('Returned to parked vessel. Online character stays in the warfront.')}
+function warLoot(){const s=war?.snapshot;if(!s)return;const l=s.loot.find(l=>Math.hypot(l.x-s.self.x,l.z-s.self.z)<=4);if(l)war.enqueue('loot',{id:l.id});else tell('No loot within 4 m.')}
 function bridge(){
+ if(g.mode==='surface'&&war){panel('Relay Crown · online','Your online character remains vulnerable while this menu is open.',[['Resume',unpause],['Return to offline vessel',exitWar]]);return}
+
  if(g.mode==='surface'){panel('Surface expedition','Your vessel remains at the landing coordinates.',[['Resume',unpause],['Board vessel',boardSurface]]);return}
 
  if(g.mode==='hangar'){hangar();return}
  panel(ships[g.ship].name+' bridge',g.world.name+' · '+save.claims.length+' claimed worlds on this device.',[
- ['Resume',unpause],['The Choir Line',campaignLog],['Free flight',launch],['Combat patrol',patrol],['Crew station',crewStation],['Field station',()=>fieldStation()],['Hearth harbor',()=>hearth()],['Orbital navigation',transfer],['Surface survey',survey],['Enter freeport',freeport],['Star chart',chart],['Walk the deck',deck],['Settings & AI Core',settingsMenu],['Change ship',hangar]])
+ ['Resume',unpause],['The Choir Line',campaignLog],['Free flight',launch],['Combat patrol',patrol],['Crew station',crewStation],['Field station',()=>fieldStation()],['Hearth harbor',()=>hearth()],['Faction warfront',()=>warfront()],['Orbital navigation',transfer],['Surface survey',survey],['Enter freeport',freeport],['Star chart',chart],['Walk the deck',deck],['Settings & AI Core',settingsMenu],['Change ship',hangar]])
 }
 function summon(){
  if(recharge>0){tell('Spirit returns in '+Math.ceil(recharge)+'s');return}
@@ -356,6 +384,7 @@ function summon(){
  }
 }
 function interact(){
+ if(g.mode==='surface'&&war){warLoot();return}
  if(g.mode==='surface'){tell(interactGround(g.expedition,ledger));return}
  if(g.mode==='journey'){selectDestination();return}
  if(g.mode==='survey'||g.mode==='navigation'){returnFlight();return}
@@ -369,6 +398,7 @@ function interact(){
 }
 function actions(){
  const a=$('actions');a.replaceChildren();
+ if(g.mode==='surface'&&war){const b=button('Fire',()=>war?.enqueue('fire'),a);b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add('fire')};b.onlostpointercapture=()=>keys.delete('fire');button('Loot',warLoot,a);button('Capture',()=>war.enqueue('capture'),a);button('Respawn',()=>war.enqueue('respawn'),a);button('Exit warfront',exitWar,a);return}
  if(g.mode==='surface'){button('Collect sample',interact,a);const b=button('Fire',()=>fireGround(g.expedition,ledger),a);b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add('fire')};b.onlostpointercapture=()=>keys.delete('fire');button('Board vessel',boardSurface,a);return}
  if(g.mode==='journey'){
   for(const [label,key] of [['Climb','u'],['Descend','j'],['Pitch up','i'],['Pitch down','k']]){
@@ -380,7 +410,7 @@ function actions(){
    const site='field/'+local.toArray().map(v=>Math.floor(v/250)).join('/');
    tell(transact(()=>extract(ledger,sector,site)))
   },a);
-  button('Disembark',disembark,a);button('Bearing',selectDestination,a);button('Harbor',()=>hearth(),a);
+  button('Disembark',disembark,a);if(g.journey.body.id===0)button('Warfront',()=>warfront(),a);button('Bearing',selectDestination,a);button('Harbor',()=>hearth(),a);
   if(g.journey.alt<3500){
    button('Survey descent',()=>{
     survey();
@@ -413,6 +443,7 @@ function actions(){
 }
 
 function shoot(){
+ if(g.mode==='surface'&&war){war.enqueue('fire');return}
  if(g.mode==='surface'){fireGround(g.expedition,ledger);return}
  if(g.mode!=='flight'||fire>0)return;
  const weapon=shipWeapon(ledger,g.ship);
@@ -435,7 +466,7 @@ function update(dt){
  comms.checkAstra(g, clock);
  aiHarness.updateAutopilot(dt);
 
- if(overlay)return;
+ if(overlay){if(war&&g.mode==='surface')war.step(g.expedition,{},performance.now(),dt);return}
  const x=axis[0]+Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft')),
        z=axis[1]+Number(keys.has('s')||keys.has('arrowdown'))-Number(keys.has('w')||keys.has('arrowup')),
        mag=Math.max(1,Math.hypot(x,z)),speed=g.mode==='deck'?3.8:ships[g.ship].speed;
@@ -444,14 +475,15 @@ function update(dt){
  const throttleRatio = Math.abs(z);
  audio.updateEngine(throttleRatio, g.mode==='journey'?(g.journey?.v.length()||0)/10000:0.3, g.mode==='journey'&&g.journey?.cruise);
 
+ if(g.mode==='surface'&&war){war.step(g.expedition,{turn:x/mag,drive:-z/mag,fire:keys.has(' ')||keys.has('fire')},performance.now(),dt);return}
  if(g.mode==='surface'){stepExpedition(g.expedition,{turn:x/mag,drive:-z/mag},dt,ledger);if(keys.has(' ')||keys.has('fire'))fireGround(g.expedition,ledger);if(g.expedition.hp<=0)boardSurface();return}
  if(g.mode==='journey'){
   const s=g.journey;if(x||keys.has('i')||keys.has('k'))s.aim=false;
   const manual={turn:x/mag,drive:-z/mag,pitch:Number(keys.has('i'))-Number(keys.has('k')),lift:Number(keys.has('u'))-Number(keys.has('j'))};
-  if(Object.values(manual).some(Boolean)){s.harborApproach=false;if(ledger.harbor){transact(()=>{delete ledger.harbor;return 'Berth released'})}}
+  if(Object.values(manual).some(Boolean)){s.harborApproach=false;s.warRally=false;if(ledger.harbor){transact(()=>{delete ledger.harbor;return 'Berth released'})}}
   if(g.crew.duty==='helm'&&Object.values(manual).some(Boolean)){takeHelm();s.aim=false}
   if(s.harborApproach){
-   if(advanceApproach(s,harborFor(s.body,relief),dt,relief)){tell('N-04 landing envelope reached. Open Harbor to secure landing gear.');actions()}
+   if(advanceApproach(s,s.warRally?rallyFor(s.body):harborFor(s.body,relief),dt,relief)){tell(s.warRally?'Relay Crown landing envelope reached. Open Warfront.':'N-04 landing envelope reached. Open Harbor to secure landing gear.');s.warRally=false;actions()}
   }else if(g.crew.duty==='helm'){
    const event=advanceLanding(g.crew,s,dt);
    crewCheckpointAge+=dt;
@@ -692,6 +724,7 @@ function frame(now){
     else if(g.mode==='navigation')showTrajectory(g.trajectory);
     else{showTrajectory(null);render(g,clock)}
   }
+  let cross=$('war-crosshair');if(!cross){cross=document.createElement('div');cross.id='war-crosshair';cross.textContent='+';document.body.append(cross)}cross.hidden=!(g.mode==='surface'&&war&&!overlay);
   updateCockpitHUD();
   const flight=g.mode==='journey'&&!overlay&&!districtOpen?g.journey:null;
   physicalCockpit=false;
@@ -709,10 +742,10 @@ function frame(now){
   const nav=g.mode==='navigation'?orbitReadout(g.trajectory):null;
   const tracked=g.mode==='journey'&&g.journey.trackStation&&stationFor(ledger,sector);
   const portStatus=g.mode==='journey'?harborStatus(harborFor(g.journey.body,relief),g.journey):null;
-  const h=overlay?'':g.mode==='surface'?(g.expedition.name+' · Suit '+Math.ceil(g.expedition.hp)+'%\nSamples '+g.expedition.sites.filter(t=>t.kind==='sample'&&t.taken).length+'/'+g.expedition.sites.filter(t=>t.kind==='sample').length+' · Sentinels '+g.expedition.sites.filter(t=>t.kind==='drone'&&t.hp>0).length+' · Ship '+Math.round(Math.hypot(g.expedition.x,g.expedition.z))+' m\n'+g.expedition.notice):g.mode==='journey'?((portStatus&&g.journey.harborApproach?'N-04 APPROACH · '+Math.round(portStatus.range)+' m range · '+Math.round(portStatus.height)+' m deck clearance\n':'')+(tracked?stationBearing(tracked,g.journey)+'\n':'')+(g.crew.duty==='helm'?'Astra · '+g.crew.flightOrder.stage+' → '+g.journey.target.name+'\n':'')+(g.journey.alt<5?(sector%4===2?'Cloud skimming':'Surface drive'):'Free flight')+' · '+(g.journey.alt<1000?Math.round(g.journey.alt)+' m':Math.round(g.journey.alt/1000).toLocaleString()+' km')+' altitude · '+Math.round(g.journey.v.length()).toLocaleString()+' m/s'):nav?('Orbit · '+Math.round(nav.altitude/1000)+' km　 '+(nav.speed/1000).toFixed(2)+' km/s　 ×'+g.trajectory.warp+'\nPeriapsis '+Math.round(nav.periapsis/1000)+' km  /  Apoapsis '+(Number.isFinite(nav.apoapsis)?Math.round(nav.apoapsis/1000)+' km':'escape')):g.mode==='survey'?(surveyStatus(g.survey)+(g.crew.duty==='survey'?' · Astra piloting':'')):g.mode==='deck'?'Forward helm · '+Math.max(0,Math.ceil(g.z+4))+' m':('Hull '+g.hp+'/'+ships[g.ship].hull+'　 Patrol '+g.enemies.length+'　 Spirit '+(recharge?Math.ceil(recharge)+'s':'ready'));
+  const h=overlay?'':g.mode==='surface'&&war?(g.expedition.name+' · '+war.snapshot.self.faction+' · HP '+g.expedition.hp+' · Kills '+war.snapshot.self.score+'\n'+Object.entries(war.snapshot.territory).map(([id,f])=>id.split('-').at(-1)+': '+f).join(' / ')+'\n'+Object.entries(war.snapshot.self.inventory).map(([k,v])=>k+' ×'+v).join(' · ')+'\n'+(war.failure?'NETWORK: ':'')+war.notice):g.mode==='surface'?(g.expedition.name+' · Suit '+Math.ceil(g.expedition.hp)+'%\nSamples '+g.expedition.sites.filter(t=>t.kind==='sample'&&t.taken).length+'/'+g.expedition.sites.filter(t=>t.kind==='sample').length+' · Sentinels '+g.expedition.sites.filter(t=>t.kind==='drone'&&t.hp>0).length+' · Ship '+Math.round(Math.hypot(g.expedition.x,g.expedition.z))+' m\n'+g.expedition.notice):g.mode==='journey'?((portStatus&&g.journey.harborApproach?'N-04 APPROACH · '+Math.round(portStatus.range)+' m range · '+Math.round(portStatus.height)+' m deck clearance\n':'')+(tracked?stationBearing(tracked,g.journey)+'\n':'')+(g.crew.duty==='helm'?'Astra · '+g.crew.flightOrder.stage+' → '+g.journey.target.name+'\n':'')+(g.journey.alt<5?(sector%4===2?'Cloud skimming':'Surface drive'):'Free flight')+' · '+(g.journey.alt<1000?Math.round(g.journey.alt)+' m':Math.round(g.journey.alt/1000).toLocaleString()+' km')+' altitude · '+Math.round(g.journey.v.length()).toLocaleString()+' m/s'):nav?('Orbit · '+Math.round(nav.altitude/1000)+' km　 '+(nav.speed/1000).toFixed(2)+' km/s　 ×'+g.trajectory.warp+'\nPeriapsis '+Math.round(nav.periapsis/1000)+' km  /  Apoapsis '+(Number.isFinite(nav.apoapsis)?Math.round(nav.apoapsis/1000)+' km':'escape')):g.mode==='survey'?(surveyStatus(g.survey)+(g.crew.duty==='survey'?' · Astra piloting':'')):g.mode==='deck'?'Forward helm · '+Math.max(0,Math.ceil(g.z+4))+' m':('Hull '+g.hp+'/'+ships[g.ship].hull+'　 Patrol '+g.enemies.length+'　 Spirit '+(recharge?Math.ceil(recharge)+'s':'ready'));
   if(h!==hud){hud=h;$('hud').textContent=h}
   label('location',g.world.name+' / '+ships[g.ship].name);
-  label('help',overlay?'':g.mode==='surface'?'W/S · Walk  A/D · Turn  Space · Fire  F · Collect':g.mode==='journey'?'W/S · Drive　 A/D · Turn　 I/K · Pitch　 U/J · Lift　 F · Bearing　 V · Cam':g.mode==='survey'?'W/S · Thrust　 A/D · Turn　 U/J · Climb / descend　 F · Orbit　 V · Cam':g.mode==='navigation'?'W/S · Prograde / retrograde　 A/D · Radial burn　 F · Patrol':g.mode==='deck'?'WASD / arrows · Walk　 Drag · Look　 F · Helm':'WASD / arrows · Fly　 Space · Fire　 E · Spirit　 F · Claim　 V · Cam');
+  label('help',overlay?'':g.mode==='surface'&&war?'W/S · Move  A/D · Aim  Space · Fire  F · Loot':g.mode==='surface'?'W/S · Walk  A/D · Turn  Space · Fire  F · Collect':g.mode==='journey'?'W/S · Drive　 A/D · Turn　 I/K · Pitch　 U/J · Lift　 F · Bearing　 V · Cam':g.mode==='survey'?'W/S · Thrust　 A/D · Turn　 U/J · Climb / descend　 F · Orbit　 V · Cam':g.mode==='navigation'?'W/S · Prograde / retrograde　 A/D · Radial burn　 F · Patrol':g.mode==='deck'?'WASD / arrows · Walk　 Drag · Look　 F · Helm':'WASD / arrows · Fly　 Space · Fire　 E · Spirit　 F · Claim　 V · Cam');
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame);
