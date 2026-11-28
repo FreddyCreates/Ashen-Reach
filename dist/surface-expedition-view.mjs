@@ -2,7 +2,8 @@ import * as T from './three.module.js';
 import {localHeight} from './planet-geography.mjs';
 import {TerrainStream} from './terrain-stream.mjs';
 import {sentinelMesh,surveyCacheMesh} from './forge-mesh.mjs';
-import {shipModel,surfaces} from './fleet-models.mjs';
+import {shipModel,shipDetailModel,shipLandingLegs,shipLandingModel,surfaces} from './fleet-models.mjs';
+import {makeCoastalWater,surfaceLightFor} from './surface-lighting.mjs';
 let active=null;
 function dispose(){if(!active)return;active.canvas.remove();active.stream?.dispose();active.scene?.traverse(o=>{o.geometry?.dispose();if(o.material&&!Array.isArray(o.material)&&![...surfaces.values()].includes(o.material))o.material.dispose()});active.mats?.forEach(m=>m.dispose());active.renderer?.dispose();active.renderer?.forceContextLoss();active=null}
 export function closeSurface(){dispose()}
@@ -12,25 +13,31 @@ function create(s,hull){
  if(!renderer){const fallback=document.createElement('canvas');fallback.style.cssText=canvas.style.cssText;fallback.style.zIndex='1';canvas.replaceWith(fallback);return {canvas:fallback,ctx:fallback.getContext('2d'),s}}
  renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.toneMapping=T.ACESFilmicToneMapping;
  const scene=new T.Scene(),camera=new T.PerspectiveCamera(67,1,.1,1800),family=s.frame.body.id%4;
- const palette=[0xb88459,0x729582,0x999999,0x52545a];scene.background=new T.Color(family===0?0xb6a18f:0x9cb6c1);scene.fog=new T.FogExp2(scene.background,.0025);
- scene.add(new T.HemisphereLight(0xcceaff,0x3a302b,2));const sun=new T.DirectionalLight(0xffd6a4,3);sun.position.set(-80,100,30);scene.add(sun);
+ const light=surfaceLightFor(family);scene.background=new T.Color(light.haze);scene.fog=new T.FogExp2(scene.background,light.density);
+ scene.add(new T.HemisphereLight(light.sky,light.ground,1.65));const sun=new T.DirectionalLight(light.sun,2.5);sun.position.set(-80,100,30);scene.add(sun);
  const stream=new TerrainStream(scene,s.frame);stream.update(s.x,s.z);
- const water=family!==0?new T.Mesh(new T.PlaneGeometry(1100,1100),new T.MeshPhysicalMaterial({color:0x225d70,roughness:.23,metalness:.18})):null;
- if(water){water.rotation.x=-Math.PI/2;scene.add(water)}
+ const water=makeCoastalWater(family,light);if(water)scene.add(water);
  renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
  sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-65,right:65,top:65,bottom:-65,near:1,far:280});sun.shadow.bias=-.0003;scene.add(sun.target);
  const mats=[new T.MeshStandardMaterial({color:0x444b52,metalness:.65,roughness:.42}),new T.MeshStandardMaterial({color:0xd2bda2,metalness:.25,roughness:.55}),new T.MeshStandardMaterial({color:0x66c8e5,emissive:0x2085aa,emissiveIntensity:1.7}),new T.MeshStandardMaterial({color:0x14191f,roughness:.8})];
  const model=data=>{const g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(data.positions,3));g.setAttribute('normal',new T.BufferAttribute(data.normals,3));g.setAttribute('uv',new T.BufferAttribute(data.uvs,2));g.setIndex(new T.BufferAttribute(data.indices,1));for(const a of data.groups)g.addGroup(a.start,a.count,a.material);const m=new T.Mesh(g,mats);m.castShadow=true;m.receiveShadow=true;return m};
- const ship=shipModel(hull);if(s.online)ship.visible=false;ship.position.y=localHeight(s.frame,0,0)+2;ship.scale.setScalar(2);scene.add(ship);
- ship.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});
+ const ship=s.online?null:shipModel(hull),shipDetail=ship?shipDetailModel(hull):null;
+ if(ship){
+  const scale=2,base=localHeight(s.frame,0,0)+1.2;
+  const groundY=shipLandingLegs(hull).map(([x,z])=>(localHeight(s.frame,x*scale,z*scale)-base)/scale);
+  ship.add(shipDetail,shipLandingModel(hull,groundY));
+  ship.position.y=base;ship.scale.setScalar(scale);scene.add(ship);
+ }
+ ship?.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});
  const markers=s.sites.map(t=>{const root=new T.Group();root.add(model(t.kind==='sample'?surveyCacheMesh():sentinelMesh()));root.position.set(t.x,localHeight(s.frame,t.x,t.z)+1.4,t.z);scene.add(root);return {root,t}});
- return {canvas,renderer,scene,camera,markers,s,stream,water,sun,mats,remote:new Map(),w:0,h:0};
+ return {canvas,renderer,scene,camera,markers,s,stream,water,sun,mats,shipDetail,remote:new Map(),w:0,h:0};
 }
 export function drawSurface(s,hull){
  if(!s){if(active)dispose();return}if(!active||active.s!==s){dispose();active=create(s,hull)}
  const a=active,w=innerWidth,h=innerHeight;
  if(a.renderer){if(a.w!==w||a.h!==h){a.w=w;a.h=h;a.renderer.setSize(w,h,false);a.camera.aspect=w/h;a.camera.updateProjectionMatrix()}
- a.stream.update(s.x,s.z);if(a.water){a.water.position.x=s.x;a.water.position.z=s.z;}
+ a.stream.update(s.x,s.z);if(a.water){a.water.position.x=s.x;a.water.position.z=s.z;a.water.userData.time.value=s.clock||0;}
+ if(a.shipDetail){const d2=s.x*s.x+s.z*s.z;a.shipDetail.visible=d2<(a.shipDetail.visible?46:38)**2;}
  const y=Math.max(s.frame.body.id%4===0?-Infinity:0,localHeight(s.frame,s.x,s.z))+1.8;
  a.sun.position.set(s.x-80,y+100,s.z+30);a.sun.target.position.set(s.x,y,s.z);
  a.camera.position.set(s.x,y,s.z);a.camera.lookAt(s.x+Math.sin(s.yaw)*12,y-.4,s.z-Math.cos(s.yaw)*12);

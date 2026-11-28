@@ -53,6 +53,14 @@ The [game plan](GAME-PLAN.md) describes the setting, campaign and connected econ
 ## Runtime
 space.mjs owns captain state, deck movement, combat, chart navigation, and local claims. space-view.mjs renders the simulation using WebGL or a projected canvas view. universe.mjs defines the shared deterministic frontier. A colony governor scores unmet district needs and specializes in housing, power, or industry. Each quarter-hour completes one project. Every eight cycles opens one world. The star chart reconstructs elapsed cycles without per-tick replay. Ships and claims persist in browser storage.
 
+## Civilian pilots and orbital traffic
+
+Use **Bridge → Star chart → Frontier edge** to see the latest charted system, or **Find world** to look up an exact name or sector ID. The catalog grows with the colony clock; the chart only permits travel to discovered worlds.
+
+Open **Traffic** to follow six named pilots, their ships, routes, backstories, current holds, depot stock and actual flight receipts. Pilots haul supplies between the four founding worlds, reposition to find stock, or run survey and patrol routes. Continuous flight renders nearby vessels at physical scale and marks observable distant transponders.
+
+With `npm run multiplayer`, the six pilots belong to one server-owned civilian simulation. `GET /api/traffic` is a read-only view shared by every connected player; the server advances its 30-second clock without clients and checkpoints to `STATE_DIR/civilian-traffic.json` using the same single-writer deployment model as the warfront. Portable and static editions keep a separate local checkpoint and show **Offline traffic**. An established shared session freezes its last snapshot while reconnecting, rather than silently switching to a different timeline. Civilian depot stocks are not player markets; synchronized player flight, civilian combat, and routes beyond the founding system are not part of this slice.
+
 ## Observatory
 Run node server/observatory.mjs with PORT and STATE_DIR set for a persistent single-writer service. It advances independently of browsers and atomically publishes a frontier checkpoint. GET /api/frontier and GET /api/worlds/0 return the clock and governors. Static hosting computes the same simulation from its clock. The observatory is optional and is not an authoritative ownership server.
 

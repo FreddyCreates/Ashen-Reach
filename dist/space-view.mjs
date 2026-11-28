@@ -1,7 +1,7 @@
 import {renderSurvey} from './survey-view.mjs';
 import * as T from './three.module.js';
 import {random} from './universe.mjs';
-import {shipModel,deckModel,surfaces} from './fleet-models.mjs';
+import {shipModel,shipDetailModel,deckModel,surfaces} from './fleet-models.mjs';
 import {applyLighting} from './mesh-light.mjs';
 import {drawFallback} from './software-view.mjs';
 
@@ -25,7 +25,7 @@ const fxGroup = new T.Group();
 scene.add(sky, deck, fleet, fxGroup);
 fleet.add(vessel, patrol, fire);
 
-const fleetAssets = new Map(), deckAssets = new Map();
+const fleetAssets = new Map(), detailAssets = new Map(), deckAssets = new Map();
 const assets = new T.TextureLoader(), textures = new Map();
 
 function texture(name) {
@@ -143,7 +143,8 @@ sky.add(belt);
 
 // Orbital stations
 const stationMat = new T.MeshStandardMaterial({color: 0xcfd6ce, metalness: 0.6, roughness: 0.4});
-const station = new T.InstancedMesh(new T.BoxGeometry(), stationMat, 160);
+// Three colony job groups, up to 18 stations each, three parts per station.
+const station = new T.InstancedMesh(new T.BoxGeometry(), stationMat, 3 * 18 * 3);
 sky.add(station);
 
 // Deep Starfield Background (Multi-layered colored stars)
@@ -200,7 +201,7 @@ const worldAtmospheres = [
   { rim: 0x48c792, glow: 0x96f5cc }  // Orison (Basalt emerald)
 ];
 
-let worldStamp = '', chosen = -1, deckChoice = -1;
+let worldStamp = '', chosen = -1, deckChoice = -1, details = null;
 function orbit(w) {
   const stamp = w.id + '/' + w.age;
   if (stamp === worldStamp) return;
@@ -321,6 +322,14 @@ function asset(id) {
     applyLighting(fleetAssets.get(id), 'ships', id);
   }
   return fleetAssets.get(id);
+}
+
+function inspectAsset(id) {
+  if (!detailAssets.has(id)) {
+    detailAssets.set(id, shipDetailModel(id));
+    coat();
+  }
+  return detailAssets.get(id);
 }
 
 function instrumentation(ship) {
@@ -542,8 +551,18 @@ export function render(g, t) {
   if (chosen !== g.ship) {
     vessel.clear();
     vessel.add(asset(g.ship).clone(), engines);
+    details = null;
     chosen = g.ship;
   }
+
+  // Nearby inspect and chase views get a material-batched detail layer.
+  // Cockpit and deck never construct or draw close-range hull details.
+  const showDetails = !deck.visible && (hangar || cameraMode === 'chase');
+  if (showDetails && !details) {
+    details = inspectAsset(g.ship).clone();
+    vessel.add(details);
+  }
+  if (details) details.visible = showDetails;
 
   if (deck.visible && deckChoice !== g.ship) {
     if (!deckAssets.has(g.ship)) deckAssets.set(g.ship, instrumentation(g.ship));

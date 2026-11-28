@@ -19,7 +19,7 @@ import {loadCrew,recordCrew,pilot} from './crew.mjs';
 import {createSurvey,advanceSurvey,surveyStatus} from './survey.mjs';
 import {createTrajectory,stepTrajectory,orbitReadout,showTrajectory} from './orbital-flight.mjs';
 import {openFreeport} from './freeroam.mjs';
-import {ships,world,cycle,frontier} from './universe.mjs';
+import {ships,world,cycle,frontier,resolveChartWorld} from './universe.mjs';
 import {render,cameraMode,setCameraMode,addCameraShake} from './space-view.mjs';
 import {audio} from './audio-engine.mjs';
 import {comms,AgentHarness} from './ai-engine.mjs';
@@ -48,7 +48,7 @@ function button(label,fn,parent){
   parent.append(b);return b;
 }
 function stop(){keys.clear();axis=[0,0];finger=null;const s=$('stick');if(s&&s.firstElementChild)s.firstElementChild.style.transform=''}
-function panel(title,body,options){stop();$('panel').classList.remove('fleet-selector','campaign-brief');$('panel').querySelector('small').textContent='SPIRIT FLEET';$('feedback').textContent='';overlay=true;$('panel').hidden=false;$('controls').hidden=true;$('heading').textContent=title;$('body').textContent=body;$('choices').replaceChildren();for(const [label,fn] of options)button(label,fn,$('choices'))}
+function panel(title,body,options){document.querySelector('.chart-search')?.remove();stop();$('panel').classList.remove('fleet-selector','campaign-brief');$('panel').querySelector('small').textContent='SPIRIT FLEET';$('feedback').textContent='';overlay=true;$('panel').hidden=false;$('controls').hidden=true;$('heading').textContent=title;$('body').textContent=body;$('choices').replaceChildren();for(const [label,fn] of options)button(label,fn,$('choices'))}
 const hullNotes=[
  'Swept wings and twin drives keep this interceptor light on its feet.',
  'Broad engine nacelles and layered armor give the frigate its heavy profile.',
@@ -73,7 +73,7 @@ function hangar(){
    save.ship=g.ship;persist();g.hp=ship.hull;deck();
  },row);$('choices').append(row)
 }
-function unpause(){stop();overlay=false;$('panel').hidden=true;$('controls').hidden=false;actions()}
+function unpause(){document.querySelector('.chart-search')?.remove();stop();overlay=false;$('panel').hidden=true;$('controls').hidden=false;actions()}
 function deck(){g.yaw=0;g.pitch=-.02;g.mode='deck';boardNavigator(g.crew,g.ship);receipt('Boarded vessel');g.x=0;g.z=4;g.shots=[];g.enemies=[];g.spirit=0;unpause();tell('Walk forward to the illuminated helm.')}
 function launch(){
  if(!g.journey||g.journey.body.id!==sector){
@@ -96,7 +96,26 @@ function patrol(){previousFlight=null;g.blockadeLink=false;g.impacts=[];g.mode='
  unpause();tell(g.enemies.length?'Hostile patrol ahead. Align your ship and fire.':'Friendly orbit. Open the chart to travel.');
  if(g.enemies.length)comms.say('Astra [Tactical]', `Warning: Orbital patrol detected. ${g.enemies.length} hostile signatures in firing arc.`, 'urgent', 'combat');
 }
-function chart(){const count=frontier(tick);page=Math.max(0,Math.min(page,Math.floor((count-1)/4)));const opts=[];for(let i=page*4;i<Math.min(count,page*4+4);i++){const w=world(i,tick);opts.push([w.name+(save.claims.includes(i)?' · claimed':''),()=>inspect(i)])}if(page>0)opts.push(['Previous',()=>{page--;chart()}]);if(page*4+4<count)opts.push(['Next',()=>{page++;chart()}]);opts.push(['Return',unpause]);panel('Star chart',count+' charted worlds · New frontier every eight colony cycles.',opts)}
+function chart(){
+ tick=cycle();
+ const count=frontier(tick),last=Math.floor((count-1)/4);page=Math.max(0,Math.min(page,last));
+ const opts=[];for(let i=page*4;i<Math.min(count,page*4+4);i++){const w=world(i,tick);opts.push([w.name+(save.claims.includes(i)?' · claimed':''),()=>inspect(i)])}
+ if(page>0)opts.push(['Previous system',()=>{page--;chart()}]);
+ if(page<last)opts.push(['Next system',()=>{page++;chart()}]);
+ if(page!==Math.floor(sector/4))opts.push(['Current system',()=>{page=Math.floor(sector/4);chart()}]);
+ if(page!==last)opts.push(['Frontier edge',()=>{page=last;chart()}]);
+ opts.push(['Return',unpause]);
+ panel('Star chart',count+' charted worlds · System '+(page+1)+' of '+(last+1)+' · One new world every eight colony cycles.',opts);
+ const search=document.createElement('form'),field=document.createElement('input');
+ search.className='chart-search';field.type='search';field.placeholder='World name or sector ID';field.setAttribute('aria-label','Find a charted world');
+ search.append(field);const submit=document.createElement('button');submit.type='submit';submit.textContent='Find world';search.append(submit);
+ search.onsubmit=e=>{
+  e.preventDefault();const id=resolveChartWorld(field.value,cycle());
+  if(id===null){tell('Not on the chart. Try Aurelia, Nacre 2 or a sector ID.');return}
+  page=Math.floor(id/4);inspect(id);
+ };
+ $('choices').after(search);
+}
 function inspect(i){const w=world(i,tick);panel(w.name,w.governor+' oversees '+w.population+' settlers, '+w.buildings[0]+' habitats, '+w.buildings[1]+' reactors and '+w.buildings[2]+' shipyards. Next project: '+w.next+'.',[[i===sector?'Enter orbit':'Jump to orbit',()=>{save.sector=sector=i;g.world=w;persist();launch()}],['Star chart',chart]])}
 const crewStorage={getItem:k=>localStorage.getItem(k),setItem:(k,v)=>localStorage.setItem(k,v)};
 g.crew=loadCrew(crewStorage);
@@ -346,6 +365,8 @@ function gateApproach(j,p,toWarfront){
  takeHelm();aiHarness.setAutopilot(null);
  if(ledger.harbor)transact(()=>{delete ledger.harbor;return 'Berth released'});
  j.warRally=toWarfront;requestApproach(j,p);audio.warpJump();unpause();
+ const veil=document.createElement('div');veil.className='gate-veil';veil.setAttribute('aria-hidden','true');
+ document.body.append(veil);veil.addEventListener('animationend',()=>veil.remove(),{once:true});setTimeout(()=>veil.remove(),1000);
  receipt('Wormhole transit to '+p.name+' approach');
  tell('Wormhole crossed. Landing assist is guiding you to '+p.id+'.');
 }
@@ -622,7 +643,7 @@ if(neuralBars && neuralBars.children.length === 0){
 }
 
 onkeydown=e=>{
-  if(districtOpen)return;
+  if(districtOpen||e.target?.matches?.('input,textarea,[contenteditable=true]'))return;
   const k=e.key.toLowerCase();
   audio.resume();
   if(k===' '||k.startsWith('arrow'))e.preventDefault();
