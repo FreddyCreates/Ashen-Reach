@@ -97,6 +97,7 @@ nav>*{pointer-events:auto}
 #actions button{min-height:44px}
 
 [hidden]{display:none!important}
+body:has(.fleet-selector:not([hidden])) #cockpit-hud,aside:empty{display:none}
 @media(pointer:fine){#stick{visibility:hidden}nav{bottom:5%}}
 @media(any-pointer:coarse){footer{display:none}}
 
@@ -273,3 +274,13 @@ body:has(.navigation-display:not([hidden])) #view{visibility:hidden}
 .physical-cockpit .flight-console{display:none}
 
 body:has(#war-crosshair:not([hidden])) #war-crosshair{display:block;position:fixed;z-index:8;pointer-events:none;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;font:20px monospace;text-shadow:0 1px 4px #000}
+
+.chart-search{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.chart-search input{width:min(24ch,100%);padding:8px 10px;border:1px solid #728998;border-radius:6px;background:#0d1a23;color:#e8f2f7;font:inherit}
+.chart-search input:focus-visible{outline:2px solid #79cbf1;outline-offset:2px}
+
+.gate-veil{position:fixed;inset:0;z-index:15;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%,transparent 12%,#16314820 38%,#76daf655 53%,#98eaffbe 56%,#254c7380 63%,#090a15 89%);
+  animation:gate-transit .72s ease-in-out both}
+@keyframes gate-transit{0%{opacity:0;transform:scale(.66)}28%{opacity:.92}100%{opacity:0;transform:scale(1.8)}}
+@media(prefers-reduced-motion:reduce){.gate-veil{display:none}}

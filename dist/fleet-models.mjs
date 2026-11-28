@@ -101,6 +101,74 @@ export function shipModel(id){
  for(let j=0;j<6;j++)b.box(steel,0,.548-j*.019,.65+j*.18,w*.89,.052,.08);
  b.box(inset,0,.17,nose+.18,.09,.12,.58);return b.finish()
 }
+// Optional close-range shell. The baked hull and its AO vertex ordering are
+// left untouched; this batched layer adds only visible, three-dimensional parts.
+const shellLight='#d7d2bd',shellDark='#202830',rib='#59616b',heat='#754c3f',warning='#c48750';
+const nozzle = new T.LatheGeometry([
+ new T.Vector2(.255,-.13),new T.Vector2(.287,-.105),new T.Vector2(.287,-.02),
+ new T.Vector2(.269,.063),new T.Vector2(.232,.074),new T.Vector2(.207,.045),
+ new T.Vector2(.213,-.035),new T.Vector2(.238,-.13),new T.Vector2(.255,-.13)
+],18);
+const railRotation=Math.PI/2;
+const nearHullConfig=[
+ {pod:.91,wingX:1.06,wingZ:.39,rake:.66,tipX:2.57,tipZ:1.52,neck:-2.16,w:.64,armor:shellLight},
+ {pod:1.49,wingX:1.43,wingZ:.09,rake:.17,tipX:1.96,tipZ:1.13,neck:-1.70,w:.93,armor:'#b8c3c3'},
+ {pod:1.20,wingX:1.23,wingZ:-.13,rake:-.39,tipX:1.87,tipZ:-1.01,neck:-2.20,w:.56,armor:'#c9c4bb'},
+];
+export function shipDetailModel(id){
+ const a=nearHullConfig[id];
+ if(!a)throw new RangeError('Unsupported fleet detail hull');
+ const b=new Builder(),{pod,wingX,wingZ,rake,tipX,tipZ,neck,w,armor:skin}=a;
+ // Radar cover, canopy support, and small belly plates establish a sense of scale.
+ b.body([[neck-.57,.047,.14,.166],[neck-.17,.11,.17,.225],[neck+.23,.14,.21,.29],[neck+.39,.11,.219,.27]],shellDark);
+ b.body([[neck-.48,.033,.167,.176],[neck-.14,.076,.224,.246],[neck+.12,.098,.254,.275],[neck+.20,.073,.261,.271]],skin);
+ b.body([[.45,w*.37,.546,.591],[.61,w*.38,.552,.609],[.95,w*.26,.508,.553],[1.17,w*.18,.483,.516]],shellDark);
+ for(const s of [-1,1]){
+  const x=s*pod;
+  // Tie the engine to the airframe with a visibly separate shroud, ring and heat fins.
+  b.primitive(nozzle,shellDark,x,.038,2.11,1,1,1,railRotation);
+  b.primitive(nozzle,heat,x,.038,2.177,.866,.72,.866,railRotation);
+  for(let i=0;i<6;i++){
+   const angle=(i+.5)*Math.PI/3;
+   b.box(rib,x+Math.cos(angle)*.279,.038+Math.sin(angle)*.279,2.084,.06,.036,.16,0,0,angle);
+  }
+  b.body([[.465,.12,.378,.398],[.51,.23,.381,.424],[1.45,.24,.381,.425],[1.59,.16,.356,.382]],shellDark,'plate',x);
+  for(let i=0;i<5;i++)b.box(i===4?heat:rib,x,.423,.61+i*.162,.326,.025,.048,.13);
+  b.body([[-.91,.06,.16,.208],[-.83,.14,.186,.237],[-.47,.19,.295,.364],[-.30,.095,.325,.36]],skin,'plate',x);
+  b.box(warning,x,.378,-.35,.169,.023,.049,-.14);
+  // Layered wing service access and visibly recessed seams, not billboard decals.
+  const polygon=[[wingX-.16,wingZ-.35],[wingX+.06,wingZ-.28],[wingX+.25,wingZ+.22+rake*.19],[wingX+.12,wingZ+.34+rake*.19],[wingX-.12,wingZ+.19]];
+  b.wing(polygon,.269,.235,shellDark,s);
+  const ox=wingX,oz=wingZ;
+  b.wing(polygon.map(([x,z])=>[ox+(x-ox)*.84,oz+(z-oz)*.84]),.283,.272,skin,s);
+  for(let i=0;i<4;i++)b.box(i===0?warning:rib,s*(wingX+.039+i*.029),.313,wingZ+.04+i*.037,.026,.011,.093,0,s*.19,0);
+  b.box(skin,s*tipX,.197,tipZ,.14,.043,.19,0,-s*rake);
+  b.box(s<0?'#f68760':'#b8f4ea',s*tipX,.225,tipZ,.051,.024,.093,0,-s*rake,0,'light');
+  // Thermal tiles and louvers run below the nacelles. Readable on a full orbit.
+  b.body([[.39,.102,-.291,-.206],[.50,.168,-.304,-.207],[1.56,.163,-.309,-.208],[1.70,.114,-.275,-.167]],rib,'plate',x);
+  for(let i=0;i<5;i++)b.box(i%2?heat:shellDark,x,-.310,.64+i*.189,.241,.036,.072);
+  b.body([[-.52,.075,-.27,-.151],[.29,.16,-.36,-.22],[1.12,.12,-.37,-.215],[1.35,.083,-.281,-.21]],shellDark,'plate',s*w*.43);
+ }
+ return b.finish();
+}
+// Grounded preview only; this does not alter the landing envelope or physics.
+export const shipLandingLegs=id=>{
+ const pod=nearHullConfig[id]?.pod;
+ return pod?[[0,-1.03,-.14],[-pod,.95,-.15],[pod,.95,-.15]]:[];
+};
+export function shipLandingModel(id,groundY){
+ const b=new Builder();
+ for(const [i,[x,z,mount]] of shipLandingLegs(id).entries()){
+  if(!Number.isFinite(groundY[i]))throw new TypeError('Invalid landing foot height');
+  const foot=Math.min(mount-.11,groundY[i]),extension=mount-foot;
+  b.box(shellDark,x,mount,z,i?.235:.171,.126,i?.31:.22);
+  b.primitive(cylinder,rib,x,foot+.055+(extension-.055)/2,z,.034,extension-.055,.034);
+  b.primitive(cylinder,heat,x,mount-extension*.24,z,.062,extension*.48,.062);
+  b.box(shellDark,x,foot+.031,z,i?.245:.172,.062,i?.34:.25);
+  b.box(warning,x,foot+.064,z-.045,i?.178:.105,.016,i?.12:.09);
+ }
+ return b.finish();
+}
 export function deckModel(id){
  const b=new Builder(),c=liveries[id];b.box(inset,0,-.17,0,6.9,.26,17);b.box(inset,0,3.65,0,6.9,.24,17);
  for(let j=0;j<10;j++){const z=7.6-j*1.6;

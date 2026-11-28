@@ -26,3 +26,18 @@ export function world(id,tick){
  return {id,name:names[id%8]+(id>=8?' '+(1+Math.floor(id/8)):''),color:colors[id%4],governor:['The Architect','The Cantor','The Warden'][specialization],population:base+buildings[0]*7+buildings[1]*2,buildings,next:labels[project],age};
 }
 export function frontier(tick){return 4+Math.floor(tick/8)}
+
+// Resolve chart labels without scanning the growing catalog. Only charted worlds are addressable.
+export function resolveChartWorld(query,tick){
+ const q=String(query).trim().replace(/\s+/g,' ').toLowerCase();
+ const numeric=/^(?:sector\s+|#)?(\d{1,16})$/.exec(q);
+ let id=numeric?Number(numeric[1]):-1;
+ if(!numeric){
+  const match=/^([a-z]+)(?: (\d{1,15}))?$/.exec(q);
+  if(!match)return null;
+  const family=names.findIndex(name=>name.toLowerCase()===match[1]);
+  if(family<0||match[2]==='1')return null;
+  id=family+(match[2]===undefined?0:(Number(match[2])-1)*names.length);
+ }
+ return Number.isSafeInteger(id)&&id>=0&&id<frontier(tick)?id:null;
+}

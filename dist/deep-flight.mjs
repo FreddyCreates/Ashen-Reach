@@ -7,6 +7,7 @@ export {relief} from './planet-geography.mjs';
 import {ImprovedNoise} from './ImprovedNoise.mjs';
 import {surveyProfile} from './survey.mjs';
 import {world,cycle} from './universe.mjs';
+import {showContactMarkers,trafficFrame,trafficPhase} from './civilian-traffic-ui.mjs';
 const noise=new ImprovedNoise(),V=(x=0,y=0,z=0)=>new Vector3(x,y,z);
 export function bodies(id){
  const first=id-id%4;
@@ -123,9 +124,67 @@ function initRenderer(){
  }
 }
 
+const contactVector=V(), contactPose=V(), contactNose=V(), contactWing=V(), contactTop=V(), contactTemp=V();
+const trafficHull=[
+ [0,3,17],[-13,-2,-9],[13,-2,-9],[0,5,-12],[-5,1,-15],[5,1,-15],
+];
+const trafficFaces=[[0,1,3],[0,3,2],[0,2,1],[1,4,3],[2,3,5],[3,4,5],[1,2,5],[1,5,4]];
+const trafficPaint=[[162,185,194],[98,123,143],[60,75,95],[124,154,175],[124,154,175],[83,227,244],[62,79,96],[70,99,118]];
+function occluded(s,dx,dy,dz,distanceSquared){
+ for(const b of s.system){
+  const cx=b.center.x-s.p.x,cy=b.center.y-s.p.y,cz=b.center.z-s.p.z;
+  const along=(cx*dx+cy*dy+cz*dz)/distanceSquared;
+  if(along>0&&along<1&&(cx-along*dx)**2+(cy-along*dy)**2+(cz-along*dz)**2<b.r*b.r)return true;
+ }
+ return false
+}
+function drawCivilianTraffic(s,up,focal,w,h,tri){
+ const contacts=trafficFrame(),tick=trafficPhase(),first=s.system[0].id;
+ for(const ship of contacts){
+  ship.front=false;
+  const from=s.system[ship.from-first],to=s.system[ship.to-first];
+  if(!from||!to)continue;
+  const t=Math.max(0,Math.min(1,(tick-ship.departureTick)/(ship.arrivalTick-ship.departureTick)));
+  const separation=from.center.distanceTo(to.center);
+  const offset=(ship.slot-2.5)*.055, height=Math.sin(Math.PI*t)*separation*(.088+ship.slot*.005);
+  contactPose.copy(from.center).lerp(to.center,t);
+  const radius=from.r+(to.r-from.r)*t;
+  contactPose.x+=radius*offset;
+  contactPose.y+=radius*.44+height;
+  contactPose.z+=radius*1.23;
+  contactVector.copy(contactPose).sub(s.p);
+  const depth=contactVector.dot(s.forward),d2=contactVector.lengthSq();
+  if(depth<.5||!Number.isFinite(d2)||occluded(s,contactVector.x,contactVector.y,contactVector.z,d2))continue;
+  ship.x=w/2+contactVector.dot(s.right)*focal/depth;
+  ship.y=h/2-contactVector.dot(up)*focal/depth;
+  if(ship.x<18||ship.x>w-76||ship.y<68||ship.y>h-56)continue;
+  ship.front=true;
+  // Far contacts are navigation transponders, not artificially oversized ships.
+  if(depth>focal*10)continue;
+  contactNose.copy(to.center).sub(from.center);
+  contactNose.x+=(to.r-from.r)*offset;
+  contactNose.y+=(to.r-from.r)*.44+Math.PI*Math.cos(Math.PI*t)*separation*(.088+ship.slot*.005);
+  contactNose.z+=(to.r-from.r)*1.23;
+  contactNose.normalize();
+  contactWing.set(0,0,1).cross(contactNose).normalize();
+  if(contactWing.lengthSq()<.05)contactWing.set(1,0,0).cross(contactNose).normalize();
+  contactTop.copy(contactNose).cross(contactWing).normalize();
+  const projected=trafficHull.map(([x,y,z])=>{
+   contactTemp.copy(contactVector).addScaledVector(contactWing,x).addScaledVector(contactTop,y).addScaledVector(contactNose,z);
+   const d=contactTemp.dot(s.forward);
+   return {x:w/2+contactTemp.dot(s.right)*focal/d,y:h/2-contactTemp.dot(up)*focal/d,z:d};
+  });
+  for(let i=0;i<trafficFaces.length;i++){
+   const v=trafficFaces[i].map(index=>({...projected[index],c:trafficPaint[i]}));
+   if(v.every(p=>p.z>.15))tri.push([...v,v[0].z+v[1].z+v[2].z]);
+  }
+ }
+ showContactMarkers(contacts,true);
+}
+
 export function drawJourney(s,now,station=null){
- if(!canvas&&!s)return;if(!canvas)initRenderer()
- canvas.hidden=!s;if(!s||now-last<40)return;last=now;
+ if(!s){showContactMarkers([],false);if(canvas)canvas.hidden=true;return;}if(!canvas)initRenderer()
+ canvas.hidden=false;if(now-last<40)return;last=now;
  const w=innerWidth,h=innerHeight;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
  const sky=Math.max(0,1-s.alt/85000);const background=[5+sky*66,10+sky*96,24+sky*115];
  if(gl){gl.viewport(0,0,w,h);gl.clearColor(...background.map(x=>x/255),1);gl.clear(gl.COLOR_BUFFER_BIT)}
@@ -171,6 +230,7 @@ export function drawJourney(s,now,station=null){
    if(vertices.every(q=>q.z>.15))tri.push([...vertices,vertices.reduce((sum,q)=>sum+q.z,0)]);
   }
  }
+ drawCivilianTraffic(s,up,focal,w,h,tri);
  tri.sort((a,b)=>b[3]-a[3]);if(gl){
   const data=new Float32Array(tri.length*18);let k=0;
   for(const [a,b,c] of tri)for(const p of [a,b,c]){

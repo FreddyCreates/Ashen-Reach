@@ -1,5 +1,6 @@
 import {createServer} from 'node:http';
 import {createWarService} from './war-service.mjs';
+import {createTrafficService} from './traffic-service.mjs';
 import {readFile, realpath, stat} from 'node:fs/promises';
 import {resolve, relative, extname, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -10,9 +11,20 @@ const contentTypes = {'.html':'text/html; charset=utf-8','.mjs':'text/javascript
 const documentRoot = await realpath(fileURLToPath(new URL('../dist/', import.meta.url)));
 const port = Number(process.env.PORT ?? 4178);
 if (!Number.isInteger(port) || port < 0 || port > 65535) throw Error('PORT must be a number from 0 to 65535.');
-const war=process.env.ASHEN_MULTIPLAYER==='1'?await createWarService({dir:process.env.STATE_DIR||'./state'}):null;
+const persistent=process.env.ASHEN_MULTIPLAYER==='1';
+const stateDir=process.env.STATE_DIR||'./state';
+const war=persistent?await createWarService({dir:stateDir}):null;
+const traffic=persistent?await createTrafficService({dir:stateDir}).catch(error=>{
+  console.error('Civilian traffic disabled:',error.message);
+  return null;
+}):null;
 const server = createServer(async (request, response) => {
   if(war&&await war(request,response))return;
+  if(traffic&&await traffic.handle(request,response))return;
+  if(persistent&&!traffic&&new URL(request.url,'http://localhost').pathname==='/api/traffic'){
+    response.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});
+    response.end(request.method==='HEAD'?undefined:JSON.stringify({error:'Shared civilian traffic unavailable.'}));return;
+  }
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     response.writeHead(405, {Allow:'GET, HEAD'}).end(); return;
   }
