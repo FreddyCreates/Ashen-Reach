@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {newUniverse,enlist,command} from '../server/shared-universe.mjs';
+test('faction combat, replay-safe loot and contested control',()=>{
+ const s=newUniverse();
+ assert.equal(enlist(s,'__proto__','Lantern Guild'),false);
+ enlist(s,'a','Lantern Guild');enlist(s,'b','Wakekeepers');enlist(s,'c','Lantern Guild');
+ assert.equal(command(s,'a',{type:'capture',seq:1},1000).ok,false);
+ assert.equal(command(s,'a',{type:'attack',target:'c',seq:1},1000).ok,false);
+ assert.equal(command(s,'a',{type:'move',x:100,z:0,seq:1},1000).ok,false);
+ for(let i=1;i<=6;i++)assert.equal(command(s,'a',{type:'attack',target:'b',damage:999,seq:i},i*1000).ok,true);
+ assert.equal(s.players.b.hp,0);
+ assert.deepEqual(s.players.b.inventory,{});
+ const id=Object.keys(s.loot)[0];
+ assert.equal(command(s,'a',{type:'loot',id,seq:7},7000).ok,true);
+ assert.equal(s.players.a.inventory.salvage,6);
+ assert.equal(command(s,'c',{type:'loot',id,seq:1},7000).ok,false);
+ assert.equal(command(s,'a',{type:'loot',id,seq:7},7000).ok,false);
+ assert.equal(command(s,'a',{type:'capture',seq:8},8000).ok,true);
+ assert.equal(s.territory['aurelia-control-0'],'Lantern Guild');
+});
