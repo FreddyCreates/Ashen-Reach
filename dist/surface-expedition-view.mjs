@@ -9,7 +9,7 @@ export function closeSurface(){dispose()}
 function create(s,hull){
  const canvas=document.createElement('canvas');canvas.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none';document.body.append(canvas);canvas.style.zIndex='1';
  let renderer;try{renderer=new T.WebGLRenderer({canvas,antialias:true})}catch{}
- if(!renderer){const fallback=document.createElement('canvas');fallback.style.cssText=canvas.style.cssText;canvas.replaceWith(fallback);return {canvas:fallback,ctx:fallback.getContext('2d'),s}}
+ if(!renderer){const fallback=document.createElement('canvas');fallback.style.cssText=canvas.style.cssText;fallback.style.zIndex='1';canvas.replaceWith(fallback);return {canvas:fallback,ctx:fallback.getContext('2d'),s}}
  renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.toneMapping=T.ACESFilmicToneMapping;
  const scene=new T.Scene(),camera=new T.PerspectiveCamera(67,1,.1,1800),family=s.frame.body.id%4;
  const palette=[0xb88459,0x729582,0x999999,0x52545a];scene.background=new T.Color(family===0?0xb6a18f:0x9cb6c1);scene.fog=new T.FogExp2(scene.background,.0025);
@@ -38,7 +38,7 @@ export function drawSurface(s,hull){
  a.renderer.render(a.scene,a.camera);return}
  const b=a.ctx;if(!b)return;a.canvas.width=w;a.canvas.height=h;b.fillStyle='#14232b';b.fillRect(0,0,w,h);
  const scale=Math.min(w,h)/550,project=t=>[w/2+(t.x-s.x)*scale,h/2+(t.z-s.z)*scale];
- b.strokeStyle='#76999e';b.beginPath();b.arc(w/2,h/2,250*scale,0,Math.PI*2);b.stroke();
+ b.strokeStyle='#76999e';b.beginPath();b.arc(w/2,h/2,12000*scale,0,Math.PI*2);b.stroke();
  for(const t of [s.ship,...s.sites]){if(t.taken||t.hp===0)continue;const [x,z]=project(t);b.fillStyle=t.kind==='drone'?'#db8959':'#8adbe0';b.fillRect(x-4,z-4,8,8)}
  b.fillStyle='#fff';b.fillRect(w/2-3,h/2-3,6,6);b.beginPath();b.moveTo(w/2,h/2);b.lineTo(w/2+Math.sin(s.yaw)*20,h/2-Math.cos(s.yaw)*20);b.stroke();
 }
