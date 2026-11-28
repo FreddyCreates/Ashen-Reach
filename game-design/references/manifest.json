@@ -1,0 +1,34 @@
+{
+  "ashen-reach-hero.png": {
+    "sha256": "b8c609cdf6cf5255dbe465045f76120860eb0f876d01b8d5cda244bc06b20ebc",
+    "dimensions": [
+      1672,
+      941
+    ],
+    "classification": "approved generated reference, not gameplay"
+  },
+  "nacre-final-approach.png": {
+    "sha256": "7c2a01494518ff223ec4c1c9c6ddd6064a9de0b91736b7b31a47291f8158c9f9",
+    "dimensions": [
+      1672,
+      941
+    ],
+    "classification": "approved generated reference, not gameplay"
+  },
+  "nacre-market.png": {
+    "sha256": "c61da2b2caaadda2198eea40b955b2a450fbdc2ff9afd71c45016014dfaf4d88",
+    "dimensions": [
+      1672,
+      941
+    ],
+    "classification": "approved generated reference, not gameplay"
+  },
+  "cockpit-descent.png": {
+    "sha256": "423ec04c011384f2f178e9b93fdcaf03d02a3fa855d9459051cad77af02d23b0",
+    "dimensions": [
+      1672,
+      941
+    ],
+    "classification": "approved generated reference, not gameplay"
+  }
+}
