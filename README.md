@@ -22,7 +22,7 @@ Explore four founding worlds, command Astra at the helm, recover the voices of t
 
 ## The next horizon
 
-Nacre's monumental coastal harbor defines the studio's visual direction: ivory ceramic and basalt architecture, orange industrial markings, warm dusk lighting, ocean cliffs, freight traffic and a clean cyan-and-amber cockpit. The connected harbor milestone will link physical docking, walkable markets, cargo and boarding. The cinematic reference images are not yet published in this repository; current rendering is still below their fidelity.
+Nacre's monumental coastal harbor defines the studio's visual direction: ivory ceramic and basalt architecture, orange industrial markings, warm dusk lighting, ocean cliffs, freight traffic and a clean cyan-and-amber cockpit. The connected harbor milestone will link physical docking, walkable markets, cargo and boarding. The [four original cinematic references](game-design/references/README.md) are preserved separately from the current game assets. They are design targets, not gameplay captures; current rendering is still below their fidelity.
 
 See the [visual production specification](VISUAL-DIRECTION.md) for the scene and gameplay acceptance criteria.
 
