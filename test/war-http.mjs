@@ -48,3 +48,38 @@ test('two HTTP clients share combat, loot, territory and durable sessions',async
   await close();url=await start();const restored=await call('state',ta);assert.equal(restored.self.inventory.salvage,6);assert.equal(restored.territory['aurelia-control-0'],'Lantern Guild');assert.equal(restored.loot.length,0);
  }finally{await close();await rm(dir,{recursive:true,force:true})}
 });
+
+test('browser sessions remain available to fresh tabs across restart without exposing a bearer token',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'ashen-browser-war-'));let server,now=100000;
+ const start=async()=>{
+  const service=await createWarService({dir,clock:()=>now});
+  server=createServer(async(req,res)=>{if(!await service(req,res))res.writeHead(404).end()});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  return 'http://127.0.0.1:'+server.address().port;
+ };
+ const close=async()=>{if(server){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));server=null}};
+ try{
+  let url=await start();
+  const call=(path,headers={},data)=>fetch(url+'/api/war/'+path,{
+   method:data===undefined?'GET':'POST',headers:{...headers,...(data===undefined?{}:{'Content-Type':'application/json'})},body:data===undefined?undefined:JSON.stringify(data)
+  });
+  const joined=await call('join',{Origin:url,'Sec-Fetch-Site':'same-origin'},{faction:'Lantern Guild'});
+  assert.equal(joined.status,201);
+  const result=await joined.json();assert.equal(result.token,undefined);
+  const setCookie=joined.headers.get('Set-Cookie');assert.match(setCookie,/HttpOnly/);assert.match(setCookie,/SameSite=Strict/);assert.match(setCookie,/Max-Age=2592000/);
+  const cookie=setCookie.split(';')[0];
+  assert.equal((await call('command',{Cookie:cookie},{type:'capture',seq:1})).status,403);
+  assert.equal((await call('command',{Cookie:cookie,Origin:'https://foreign.invalid'},{type:'capture',seq:1})).status,403);
+  await close();url=await start();
+  const reopened=await call('state',{Cookie:cookie});assert.equal(reopened.status,200);
+  assert.equal((await reopened.json()).self.id,result.self.id);
+  assert.equal((await call('state')).status,401);
+  const same=await call('join',{Cookie:cookie,Origin:url},{faction:'Wakekeepers'});
+  assert.equal(same.status,200);assert.equal((await same.json()).self.id,result.self.id);
+  now+=1200;
+  const old=await (await call('join',{}, {faction:'Wakekeepers'})).json();
+  const migrated=await call('resume',{Origin:url,Authorization:'Bearer '+old.token},{});
+  assert.equal(migrated.status,200);assert.equal((await migrated.json()).self.id,old.self.id);
+  assert.ok(migrated.headers.get('Set-Cookie'));
+ }finally{await close();await rm(dir,{recursive:true,force:true})}
+});

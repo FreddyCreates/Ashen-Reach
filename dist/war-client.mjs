@@ -6,15 +6,19 @@ export class WarClient{
   const headers={};if(this.token)headers.Authorization='Bearer '+this.token;if(data)headers['Content-Type']='application/json';
   const response=await fetch('/api/war/'+path,{method,headers,body:data?JSON.stringify(data):undefined,cache:'no-store',signal:AbortSignal.timeout(5000)});
   const result=await response.json();if(result.self)this.snapshot=result;
-  if(!response.ok)throw Error(result.error||'Network request rejected');return result;
+  if(!response.ok){const error=Error(result.error||'Network request rejected');error.status=response.status;throw error}return result;
  }
  async connect(faction){
   if(location.protocol!=='http:'&&location.protocol!=='https:')throw Error('Launch the network server, not the offline HTML file.');
+  // HttpOnly cookies keep the durable identity available across tabs without exposing a credential to script.
+  try{await this.request('state');this.active=true;return}catch(error){if(error.status!==401)throw error}
   try{this.token=sessionStorage.getItem(KEY)}catch{}
-  if(this.token){try{await this.request('state');this.active=true;return}catch{this.token=null}}
-  if(!faction)throw Error('Choose a faction.');
-  const result=await this.request('join','POST',{faction});this.token=result.token;
-  try{sessionStorage.setItem(KEY,this.token)}catch{}
+  if(this.token){
+   try{await this.request('resume','POST');this.token=null;try{sessionStorage.removeItem(KEY)}catch{};this.active=true;return}
+   catch(error){if(error.status!==401)throw error;this.token=null}
+  }
+  if(!faction)throw Error('No saved character in this browser. Choose a faction to enlist.');
+  await this.request('join','POST',{faction});
   this.active=true;
  }
  makeSurface(){const p=this.snapshot.self;return {frame:warFrame,x:p.x,z:p.z,yaw:p.yaw,hp:p.hp,clock:0,sites:[],ship:{x:0,z:0},online:true,remote:this.snapshot,name:'Aurelia / Relay Crown'}}

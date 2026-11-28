@@ -1,3 +1,4 @@
+import {crossWormhole,wormholeAvailable} from './wormhole-navigation.mjs';
 import {WarClient} from './war-client.mjs';
 import {FACTIONS,rallyFor} from './warfront-geography.mjs';
 import {catalog,restoreArmory,purchase,equip,shipWeapon,groundWeapon,armorAbsorb} from './armory.mjs';
@@ -308,6 +309,7 @@ function hearth(message=''){
  if(sector!==1)options.push(['Plot Nacre',()=>inspect(1)]);
  else if(!s)options.push(['Enter Nacre flight',()=>{launch();hearth()}]);
  else{
+  if(wormholeAvailable(s,p,relief))options.push(['Use Hearth Exchange wormhole',()=>gateApproach(s,p,false)]);
   options.push(['Request N-04 approach',()=>{takeHelm();aiHarness.setAutopilot(null);requestApproach(s,p);unpause();tell('N-04 clearance granted. Manual input cancels approach.')}]);
   if(status?.ready){
    options.push(['Secure landing gear',()=>{let docked=false;transact(()=>{docked=dockHarbor(s,p,ledger,g.ship);return 'Berth secured'});if(docked){receipt('Docked at Hearth Exchange N-04');hearth('Landing gear secured.')}}]);
@@ -339,14 +341,26 @@ function boardSurface(){
  g.expedition=null;g.mode='journey';unpause();tell(msg);
 }
 let war=null,warJoining=false;
+function gateApproach(j,p,toWarfront){
+ if(!crossWormhole(j,p,relief)){tell('Wormhole unavailable outside its orbital corridor.');return}
+ takeHelm();aiHarness.setAutopilot(null);
+ if(ledger.harbor)transact(()=>{delete ledger.harbor;return 'Berth released'});
+ j.warRally=toWarfront;requestApproach(j,p);audio.warpJump();unpause();
+ receipt('Wormhole transit to '+p.name+' approach');
+ tell('Wormhole crossed. Landing assist is guiding you to '+p.id+'.');
+}
 function warfront(message=''){
  const j=g.mode==='journey'?g.journey:null,p=j&&rallyFor(j.body),status=harborStatus(p,j);
  const opts=[];
  if(!j)opts.push(['Return to flight',()=>{launch();warfront()}]);
  else if(!p)opts.push(['Plot Aurelia via flight computer',selectDestination]);
  else{
+  if(wormholeAvailable(j,p,relief))opts.push(['Use Relay Crown wormhole',()=>gateApproach(j,p,true)]);
   opts.push(['Request Relay Crown approach',()=>{takeHelm();aiHarness.setAutopilot(null);j.warRally=true;requestApproach(j,p);unpause();tell('Relay Crown approach engaged.') }]);
-  if(status?.ready)for(const f of FACTIONS)opts.push(['Enlist / resume · '+f,()=>joinWar(f)]);
+  if(status?.ready){
+   opts.push(['Resume saved character',()=>joinWar()]);
+   for(const f of FACTIONS)opts.push(['Enlist · '+f,()=>joinWar(f)]);
+  }
  }
  panel('Aurelia · Relay Crown',message+' Land at A-01 to enter the networked faction war. The online inventory is server-owned and separate from offline saves. '+(status?'Range '+Math.round(status.range)+' m · Clearance '+Math.round(status.height)+' m':'Travel to Aurelia first.'),[...opts,['Bridge',bridge]]);
 }
@@ -650,7 +664,7 @@ function updateFlightInstruments(){
  if(!s)return;
  el.classList.toggle('cockpit-frame',cameraMode==='cockpit'&&!physicalCockpit);
  const normal=s.p.clone().sub(s.body.center).normalize();
- const port=s.harborApproach?harborFor(s.body,relief):null;
+ const port=s.harborApproach?(s.warRally?rallyFor(s.body):harborFor(s.body,relief)):null;
  const bearing=(port?port.position:s.target.center).clone().sub(s.p);
  const vertical=s.v.dot(normal),north=normal.clone().multiplyScalar(-normal.y);north.y+=1;
  if(north.lengthSq()<1e-10)north.set(0,0,1);north.normalize();
@@ -660,7 +674,7 @@ function updateFlightInstruments(){
  label('flight-alt',format(s.alt)+' m');
  label('flight-vs',(vertical>=0?'+':'')+format(vertical)+' m/s');
  label('flight-heading',String(Math.round((heading+360)%360)%360).padStart(3,'0')+'°');
- label('flight-target',port?'HEARTH N-04':s.target.name.toUpperCase());
+ label('flight-target',port?(port.name+' '+port.id).toUpperCase():s.target.name.toUpperCase());
  label('flight-distance',format(Math.max(0,bearing.length()-(port?0:s.target.r))/1000)+' km');
  label('flight-drive',s.cruise?'CRUISE ASSIST':'NEWTONIAN');
  label('flight-hull',Math.round(100*Math.max(0,g.hp)/ships[g.ship].hull)+'%');
