@@ -1,30 +1,51 @@
 // Authoritative fictional combat and loot rules. No client supplied damage or rewards.
 import {randomUUID} from 'node:crypto';
-const factions=['Lantern Guild','Wakekeepers','Free Captains'];
+import {FACTIONS as factions,CONTROL,WAR_RADIUS,ground,hasLine} from '../dist/warfront-geography.mjs';
 const weapons={pulse:{damage:18,range:24,cooldown:480},carbine:{damage:26,range:42,cooldown:400}};
 export function newUniverse(){return {schema:1,players:{},loot:{},territory:{},revision:0}}
 const own=(o,k)=>Object.hasOwn(o,k);
 export function enlist(s,id,faction){
  if(!/^[a-zA-Z0-9_-]{1,64}$/.test(id)||!factions.includes(faction)||['__proto__','constructor','prototype'].includes(id)||own(s.players,id))return false;
- s.players[id]={id,faction,body:0,x:0,z:0,hp:100,inventory:{pulse:1,salvage:3},weapon:'pulse',lastFire:0,lastMove:0,seq:0};s.revision++;return true;
+ s.players[id]={id,faction,body:0,x:0,z:0,hp:100,inventory:{pulse:1,salvage:3},weapon:'pulse',lastFire:0,lastMove:0,seq:0,defeatedAt:null,yaw:0,score:0,seen:0};s.revision++;return true;
 }
 const range=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 export function command(s,id,cmd,now=Date.now()){
  const p=typeof id==='string'&&own(s.players,id)?s.players[id]:null;
  if(!p||!Number.isSafeInteger(cmd?.seq)||cmd.seq!==p.seq+1)return {ok:false,error:'Invalid sequence or player'};
- if(!Number.isFinite(now)||p.hp<=0)return {ok:false,error:'Player unavailable'};
+ if(!Number.isFinite(now))return {ok:false,error:'Invalid clock'};
+ if(p.hp<=0&&cmd.type!=='respawn')return {ok:false,error:'Player unavailable'};
  const reject=error=>({ok:false,error});
  let event;
- if(cmd.type==='move'){
+ if(cmd.type==='respawn'){
+  if(p.hp>0||now-(p.defeatedAt??now)<5000)return reject('Recovery not ready');
+  p.hp=100;p.x=p.faction==='Lantern Guild'?-45:p.faction==='Wakekeepers'?45:0;p.z=45;p.inventory={pulse:1};p.weapon='pulse';p.lastMove=now;p.lastFire=now;p.yaw=0;p.defeatedAt=null;event='Recovered';
+ }else if(cmd.type==='input'){
+  if(!Number.isFinite(cmd.turn)||!Number.isFinite(cmd.drive))return reject('Invalid input');
+  const dt=Math.min(.25,Math.max(0,(now-p.lastMove)/1000));
+  const clamp=v=>Math.max(-1,Math.min(1,v));
+  p.yaw=(p.yaw-clamp(cmd.turn)*dt*2.2)%(Math.PI*2);
+  const d=clamp(cmd.drive)*dt*6,x=p.x+Math.sin(p.yaw)*d,z=p.z-Math.cos(p.yaw)*d;
+  if(Math.hypot(x,z)<=WAR_RADIUS&&Math.abs(ground(x,z)-ground(p.x,p.z))<=Math.max(.2,Math.abs(d)*1.2)){p.x=x;p.z=z}
+  p.lastMove=now;event='Moved';
+ }else if(cmd.type==='move'){
   if(!Number.isFinite(cmd.x)||!Number.isFinite(cmd.z))return reject('Invalid coordinates');
   const dt=Math.min(1,Math.max(0,(now-p.lastMove)/1000));
   if(range(p,cmd)>6*dt+.05||Math.abs(cmd.x)>100000||Math.abs(cmd.z)>100000)return reject('Movement outside envelope');
   p.x=cmd.x;p.z=cmd.z;p.lastMove=now;event='Moved';
+ }else if(cmd.type==='fire'){
+  const w=weapons[p.weapon];if(!w||!own(p.inventory,p.weapon)||now-p.lastFire<w.cooldown)return reject('Weapon cooling');
+  p.lastFire=now;let target=null,best=Infinity;
+  for(const q of Object.values(s.players)){
+   if(q===p||q.hp<=0||q.body!==p.body||q.faction===p.faction||now-(q.seen||0)>30000)continue;
+   const d=range(p,q),dot=d>0?((q.x-p.x)*Math.sin(p.yaw)-(q.z-p.z)*Math.cos(p.yaw))/d:1;
+   if(d<=w.range&&d<best&&dot>=.965&&hasLine(p,q)){target=q;best=d}
+  }
+  event='Miss';if(target){target.hp=Math.max(0,target.hp-w.damage);event='Hit';if(!target.hp){target.defeatedAt=now;const lootId=randomUUID();s.loot[lootId]={id:lootId,body:target.body,x:target.x,z:target.z,items:{...target.inventory},owner:target.id};target.inventory={};p.score=(p.score||0)+1;event='Defeated'}}
  }else if(cmd.type==='attack'){
   const q=own(s.players,cmd.target)?s.players[cmd.target]:null,w=weapons[p.weapon];
   if(!own(p.inventory,p.weapon)||!w||!q||q===p||q.hp<=0||q.body!==p.body||q.faction===p.faction||range(p,q)>w.range||now-p.lastFire<w.cooldown)return reject('Target or cooldown invalid');
   p.lastFire=now;q.hp=Math.max(0,q.hp-w.damage);event='Hit';
-  if(q.hp===0){const lootId=randomUUID();s.loot[lootId]={id:lootId,body:q.body,x:q.x,z:q.z,items:{...q.inventory},owner:q.id};q.inventory={};event='Defeated';}
+  if(q.hp===0){q.defeatedAt=now;const lootId=randomUUID();s.loot[lootId]={id:lootId,body:q.body,x:q.x,z:q.z,items:{...q.inventory},owner:q.id};q.inventory={};event='Defeated';}
  }else if(cmd.type==='loot'){
   const l=own(s.loot,cmd.id)?s.loot[cmd.id]:null;
   if(!l||l.body!==p.body||range(l,p)>4)return reject('Loot unavailable');
@@ -33,9 +54,10 @@ export function command(s,id,cmd,now=Date.now()){
   delete s.loot[cmd.id];event='Loot recovered';
  }else if(cmd.type==='capture'){
   // Fixed control point; uncontested occupation required.
-  if(p.body!==0||Math.hypot(p.x,p.z)>8)return reject('Outside control point');
-  if(Object.values(s.players).some(q=>q.body===p.body&&q.hp>0&&q.faction!==p.faction&&range(q,p)<24))return reject('Territory contested');
-  s.territory['aurelia-control-0']=p.faction;event='Territory captured';
+  const point=CONTROL.find(c=>range(c,p)<=8);
+  if(p.body!==0||!point)return reject('Outside control point');
+  if(Object.values(s.players).some(q=>q.body===p.body&&q.hp>0&&q.faction!==p.faction&&(!q.seen||now-q.seen<=30000)&&range(q,p)<24))return reject('Territory contested');
+  s.territory[point.id]=p.faction;event='Territory captured';
  }else return reject('Unknown command');
- p.seq++;s.revision++;return {ok:true,event,revision:s.revision};
+ p.seq++;p.seen=now;s.revision++;return {ok:true,event,revision:s.revision};
 }

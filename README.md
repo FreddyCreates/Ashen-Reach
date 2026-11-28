@@ -104,3 +104,7 @@ python3 tools/encode-views.py /tmp/reach-bake dist/art
 
 ## Frontier release
 Open **Bridge** after boarding. **Orbital navigation** integrates a two-body orbit with manoeuvring thrust. **Surface survey** places your ship in a local atmospheric flight region with gravity, drag and beacon scans. **Enter freeport** opens a district with carriers, customs ships, station contracts and refits. **Crew station** assigns Astra to fly a survey or returns control to the player. Crew identity and the latest 48 activity records are saved in this browser profile. These game agents run locally while playing. The campaign has separate navigation, atmospheric and combat modes.
+
+## Networked faction warfront
+
+Run `npm run multiplayer` and open http://127.0.0.1:4178/ in two separate browser profiles. In continuous flight on Aurelia select Warfront, request Relay Crown approach, and enlist after landing. Server-owned characters use separate inventories from offline saves. W/S move, A/D aim, Space fires, F loots; capture and respawn are available on the action bar. For LAN use HOST=0.0.0.0; deploy behind HTTPS with a persistent STATE_DIR and single writer. GitHub Pages remains offline-only. This is a bounded networked region, not yet a globally networked flight simulation.

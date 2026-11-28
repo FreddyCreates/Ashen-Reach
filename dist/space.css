@@ -271,3 +271,5 @@ body:has(.navigation-display:not([hidden])) #view{visibility:hidden}
 @media(prefers-reduced-motion:reduce){.pulse-ring,.astra-comms{animation:none}.neural-bar{transition:none}}
 
 .physical-cockpit .flight-console{display:none}
+
+body:has(#war-crosshair:not([hidden])) #war-crosshair{display:block;position:fixed;z-index:8;pointer-events:none;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;font:20px monospace;text-shadow:0 1px 4px #000}
