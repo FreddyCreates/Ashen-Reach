@@ -39,7 +39,10 @@ export function advanceApproach(s,p,dt,relief){
  const deck=p.position.distanceTo(b.center)-b.r;
  const high=Math.max(deck+4000,7000);
  let target;
- if(surfaceDistance>110){
+ if(radial>Math.max(20_000,high*2.5)){
+  // Bleed orbital altitude radially before any long traverse; near terrain use the existing slow profile.
+  target=b.center.clone().addScaledVector(n,b.r+high);
+ }else if(surfaceDistance>110){
   if(radial<high-100)target=b.center.clone().addScaledVector(n,b.r+high);
   else{
    let tangent=p.up.clone().addScaledVector(n,-p.up.dot(n));
@@ -49,7 +52,7 @@ export function advanceApproach(s,p,dt,relief){
   }
  }else target=p.position.clone().addScaledVector(p.up,3);
  const d=target.clone().sub(s.p),distance=d.length();
- const limit=surfaceDistance>110?Math.min(60000,Math.max(25,radial*.65)):Math.min(1000,Math.max(1,distance*.55));
+ const limit=radial>Math.max(20_000,high*2.5)?Math.min(2e7,Math.max(1000,(radial-high)*.62)):surfaceDistance>110?Math.min(60000,Math.max(25,radial*.65)):Math.min(1000,Math.max(1,distance*.55));
  const desired=d.clone().normalize().multiplyScalar(Math.min(limit,distance*1.4));
  s.v.lerp(desired,1-Math.exp(-4*dt));s.p.addScaledVector(s.v,dt);
  const local=s.p.clone().sub(b.center).normalize(),floor=b.r+relief(b,local)+3;
