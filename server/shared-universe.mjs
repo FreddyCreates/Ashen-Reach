@@ -5,12 +5,12 @@ const weapons={pulse:{damage:18,range:24,cooldown:480},carbine:{damage:26,range:
 export function newUniverse(){return {schema:1,players:{},loot:{},territory:{},revision:0}}
 const own=(o,k)=>Object.hasOwn(o,k);
 export function enlist(s,id,faction){
- if(!/^[a-zA-Z0-9_-]{1,64}$/.test(id)||!factions.includes(faction)||own(s.players,id))return false;
+ if(!/^[a-zA-Z0-9_-]{1,64}$/.test(id)||!factions.includes(faction)||['__proto__','constructor','prototype'].includes(id)||own(s.players,id))return false;
  s.players[id]={id,faction,body:0,x:0,z:0,hp:100,inventory:{pulse:1,salvage:3},weapon:'pulse',lastFire:0,lastMove:0,seq:0};s.revision++;return true;
 }
 const range=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 export function command(s,id,cmd,now=Date.now()){
- const p=own(s.players,id)?s.players[id]:null;
+ const p=typeof id==='string'&&own(s.players,id)?s.players[id]:null;
  if(!p||!Number.isSafeInteger(cmd?.seq)||cmd.seq!==p.seq+1)return {ok:false,error:'Invalid sequence or player'};
  if(!Number.isFinite(now)||p.hp<=0)return {ok:false,error:'Player unavailable'};
  const reject=error=>({ok:false,error});
@@ -22,7 +22,7 @@ export function command(s,id,cmd,now=Date.now()){
   p.x=cmd.x;p.z=cmd.z;p.lastMove=now;event='Moved';
  }else if(cmd.type==='attack'){
   const q=own(s.players,cmd.target)?s.players[cmd.target]:null,w=weapons[p.weapon];
-  if(!q||q===p||q.hp<=0||q.body!==p.body||q.faction===p.faction||range(p,q)>w.range||now-p.lastFire<w.cooldown)return reject('Target or cooldown invalid');
+  if(!own(p.inventory,p.weapon)||!w||!q||q===p||q.hp<=0||q.body!==p.body||q.faction===p.faction||range(p,q)>w.range||now-p.lastFire<w.cooldown)return reject('Target or cooldown invalid');
   p.lastFire=now;q.hp=Math.max(0,q.hp-w.damage);event='Hit';
   if(q.hp===0){const lootId=randomUUID();s.loot[lootId]={id:lootId,body:q.body,x:q.x,z:q.z,items:{...q.inventory},owner:q.id};q.inventory={};event='Defeated';}
  }else if(cmd.type==='loot'){
